@@ -27,7 +27,9 @@
   .topbar .spacer { flex: 1; }
   .sheet-name { color: var(--muted); font-size: 13px; max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  main { max-width: 720px; margin: 0 auto; padding: 16px 14px 120px; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px 14px 8px; }
+  .site-foot { max-width: 720px; margin: 0 auto; padding: 8px 14px 110px; text-align: center; font-size: 13px; color: var(--muted); }
+  .site-foot a { color: var(--muted); }
   .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin: 18px 0; }
   .panel h2 { margin: 0 0 6px; font-size: 20px; }
   .muted { color: var(--muted); }
@@ -140,6 +142,7 @@
   <button class="icon-btn small" id="menuBtn" aria-label="Menu" hidden>☰</button>
 </header>
 <main id="app"></main>
+<footer class="site-foot"><a href="privacy.html">Privacy Policy</a> · <a href="https://github.com/yahia-raheem/workout-tracker">Source on GitHub</a></footer>
 <div class="savebar" id="savebar" hidden>
   <div class="inner">
     <div class="count" id="saveCount"></div>
@@ -550,7 +553,8 @@ function renderSignin(err) {
     <p class="muted">Sign in with Google, then pick your tracker sheet. The app only gets access to the sheet you pick.</p>
     ${err ? `<div class="banner err">${esc(err)}</div>` : ''}
     ${last ? `<p class="small muted">Last sheet: <b>${esc(last.name)}</b></p>` : ''}
-    <button class="btn block" data-act="signin">Sign in with Google</button></div>`;
+    <button class="btn block" data-act="signin">Sign in with Google</button>
+    <p class="small muted center" style="margin:12px 0 0">By signing in you agree to how the app uses your data, as described in the <a href="privacy.html">Privacy Policy</a>.</p></div>`;
 }
 function renderPick(err) {
   setChrome({ menu: true });
@@ -712,6 +716,7 @@ function showMenu() {
     ${DEMO ? `<a class="btn ghost block" href="./" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px">Leave demo</a>` :
       `<button class="btn ghost block" data-act="pick" style="margin-bottom:10px">Choose another sheet</button>
        <button class="btn ghost block" data-act="signout" style="margin-bottom:10px">Sign out</button>`}
+    <a class="btn ghost block" href="privacy.html" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px">Privacy Policy</a>
     <button class="btn block" data-act="close">Close</button>`);
 }
 

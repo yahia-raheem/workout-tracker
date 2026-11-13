@@ -60,6 +60,10 @@ Run `python3 -m http.server 8000` again, open <http://localhost:8000>, sign in, 
 2. **Settings → Pages → Deploy from a branch → `main` / root**.
 3. Your app will be at `https://<username>.github.io/workout-log/`. Make sure `https://<username>.github.io` is in the OAuth client's JavaScript origins and in the API key's website restrictions (step 4 and 5).
 
+## Privacy policy
+
+`privacy.html` is the app's privacy policy, linked from the sign-in screen, the footer and the menu. Use its address (`https://<username>.github.io/workout-tracker/privacy.html`) as the **Privacy policy link** in Google Auth Platform → Branding, and the app's address as the **Application home page**.
+
 ## How it reads and writes your sheet
 
 | Tab | What the app uses |
