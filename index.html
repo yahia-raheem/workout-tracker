@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>Workout Log</title>
+<style>
+  :root {
+    --bg: #0f1115; --card: #181b22; --card2: #1f232c; --line: #2a2f3a;
+    --text: #e9ebef; --muted: #8b919d; --accent: #d4ff3a; --accent-ink: #141a00;
+    --ok: #4ade80; --warn: #fbbf24; --err: #f87171; --info: #60a5fa;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Arabic", sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  a { color: var(--accent); }
+
+  .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top));
+    background: rgba(15,17,21,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  .brand { font-weight: 800; letter-spacing: .3px; }
+  .brand b { color: var(--accent); }
+  .topbar .spacer { flex: 1; }
+  .sheet-name { color: var(--muted); font-size: 13px; max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  main { max-width: 720px; margin: 0 auto; padding: 16px 14px 120px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin: 18px 0; }
+  .panel h2 { margin: 0 0 6px; font-size: 20px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+
+  .btn { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 700; background: var(--accent); color: var(--accent-ink); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 600; }
+  .btn.block { width: 100%; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .text-btn { background: none; border: 0; color: var(--accent); font-weight: 600; padding: 8px 6px; }
+  .text-btn.danger { color: var(--err); }
+  .icon-btn { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--card2); display: grid; place-items: center; flex: none; }
+  .icon-btn.small { width: 34px; height: 34px; border-radius: 10px; font-size: 14px; color: var(--muted); }
+  .icon-btn.small.on { color: var(--accent); border-color: var(--accent); }
+
+  /* validation */
+  .checks { list-style: none; padding: 0; margin: 14px 0; }
+  .checks li { display: flex; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .checks li:first-child { border-top: 0; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; flex: none; }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.error { background: var(--err); } .dot.info { background: var(--info); }
+  .checks details { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .checks summary { cursor: pointer; }
+
+  /* day picker */
+  .session-head { margin: 6px 0 10px; }
+  .plan-name { font-size: 13px; color: var(--muted); }
+  .days { display: flex; gap: 8px; overflow-x: auto; padding: 6px 0 10px; scrollbar-width: none; }
+  .day { flex: none; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font-weight: 600; position: relative; }
+  .day.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .day.draft::after { content: ""; position: absolute; top: 4px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+
+  .banner { border-radius: 12px; padding: 10px 14px; margin: 10px 0; display: flex; gap: 10px; align-items: center; justify-content: space-between;
+    background: #2a2412; border: 1px solid #5c4a14; color: #fde68a; font-size: 14px; }
+  .banner.err { background: #2a1414; border-color: #5c1f1f; color: #fecaca; }
+
+  /* exercise cards */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin: 12px 0; }
+  .card.has { border-color: #4a5a1a; }
+  .card-head { display: flex; gap: 12px; align-items: flex-start; }
+  .card-head .titles { flex: 1; min-width: 0; }
+  .card h3 { margin: 4px 0 2px; font-size: 17px; text-transform: capitalize; }
+  .chip { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
+    color: var(--muted); background: var(--card2); border-radius: 6px; padding: 2px 7px; margin-right: 6px; }
+  .chip.adhoc { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 13px; }
+  .note { margin: 10px 0 0; padding: 8px 10px; background: var(--card2); border-radius: 10px; font-size: 14px; color: #cfd3da; white-space: pre-line; }
+  .video { color: var(--accent); font-size: 15px; }
+
+  .sets { margin-top: 12px; }
+  .set-row { display: grid; grid-template-columns: 30px 1fr 76px 76px 34px; gap: 8px; align-items: center; padding: 4px 0; }
+  .set-row.head { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); padding-bottom: 2px; }
+  .set-no { font-weight: 700; color: var(--muted); text-align: center; }
+  .set-row.done .set-no { color: var(--accent); }
+  .prev { text-align: left; background: none; border: 1px dashed var(--line); border-radius: 10px; padding: 8px; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prev:disabled { border-color: transparent; cursor: default; }
+  .prev:not(:disabled):active { background: var(--card2); }
+  .set-row input, .set-note input, .field input, .field select {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; text-align: center; font-variant-numeric: tabular-nums; }
+  .set-row input:focus, .set-note input:focus, .field input:focus, .field select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .set-row input::placeholder { color: #565c68; }
+  .set-note { padding: 2px 0 6px 38px; }
+  .set-note input { text-align: start; font-size: 14px; }
+  .card-foot { display: flex; gap: 4px; margin-top: 6px; }
+
+  .add-ex { width: 100%; padding: 14px; border-radius: var(--radius); border: 1px dashed var(--line); background: none; color: var(--accent); font-weight: 700; margin-top: 6px; }
+
+  /* save bar */
+  .savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: rgba(15,17,21,.95); backdrop-filter: blur(8px); border-top: 1px solid var(--line); }
+  .savebar .inner { max-width: 720px; margin: 0 auto; display: flex; gap: 12px; align-items: center; }
+  .savebar .count { flex: 1; color: var(--muted); font-size: 14px; }
+  .savebar .count b { color: var(--text); }
+
+  /* modal */
+  .modal { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.65); display: none; align-items: flex-end; justify-content: center; }
+  .modal.open { display: flex; }
+  .sheet { width: 100%; max-width: 560px; max-height: 92vh; overflow: auto; background: var(--card); border: 1px solid var(--line);
+    border-radius: 18px 18px 0 0; padding: 18px; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  @media (min-width: 640px) { .modal { align-items: center; } .sheet { border-radius: 18px; } }
+  .sheet h3 { margin: 0 0 12px; text-transform: capitalize; }
+  .field { margin: 12px 0; }
+  .field label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 6px; }
+  .field input, .field select { text-align: start; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .frame { position: relative; width: 100%; aspect-ratio: 9 / 16; max-height: 70vh; background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 12px; }
+  .frame.wide { aspect-ratio: 16 / 9; }
+  .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .summary { list-style: none; padding: 0; margin: 8px 0 14px; }
+  .summary li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .summary li span:first-child { text-transform: capitalize; }
+  table.preview { width: 100%; border-collapse: collapse; font-size: 12px; margin: 10px 0; }
+  table.preview th, table.preview td { border-bottom: 1px solid var(--line); padding: 5px 4px; text-align: left; white-space: nowrap; }
+
+  .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%) translateY(20px); opacity: 0; transition: .25s;
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 600; z-index: 60; pointer-events: none; max-width: 90vw; }
+  .toast.show { opacity: 1; transform: translateX(-50%); }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .center { text-align: center; }
+  code { background: var(--card2); padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Workout<b>Log</b></div>
+  <div class="spacer"></div>
+  <div class="sheet-name" id="sheetName"></div>
+  <button class="icon-btn small" id="menuBtn" aria-label="Menu" hidden>☰</button>
+</header>
+<main id="app"></main>
+<div class="savebar" id="savebar" hidden>
+  <div class="inner">
+    <div class="count" id="saveCount"></div>
+    <button class="btn" id="saveBtn">Save workout</button>
+  </div>
+</div>
+<div class="modal" id="modal"><div class="sheet" id="modalBody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ============================================================
+   CONFIG: fill these in from Google Cloud Console (see README)
+   ============================================================ */
+const CONFIG = {
+  CLIENT_ID: '869347169890-vt96f4k1h9tbu9l1umhggoil2rdp75di.apps.googleusercontent.com',
+  API_KEY:   'AIzaSyD1iFsWE8t8GgWtbkhyuOKq9RjFzjvzI9I',
+  APP_ID:    '869347169890',   // numeric Cloud project number
+};
+// drive.file = the app can only touch files you pick with the Picker.
+const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const DEMO = new URLSearchParams(location.search).has('demo');
+
+/* Expected sheet layout. Header rows are found automatically (first 20 rows). */
+const SCHEMA = {
+  plan: { tab: 'Plan', label: 'Plan',
+    cols: { day: /^day$/, category: /^category$/, exercise: /^exercise$/, sets: /^(# ?)?sets?$/,
+            reps: /^target reps?$/, rest: /^rest/, notes: /^notes?$/, video: /video/ },
+    names: { day: 'Day', category: 'Category', exercise: 'Exercise', sets: '# Sets', reps: 'Target Reps', rest: 'Rest', notes: 'Notes', video: 'Exercise Video link' },
+    required: ['day', 'category', 'exercise', 'sets', 'reps'] },
+  settings: { tab: 'Settings', label: 'Settings (exercise library)',
+    cols: { category: /^category$/, exercise: /^exercise$/, video: /video/ },
+    names: { category: 'Category', exercise: 'Exercise', video: 'Video Link' },
+    required: ['category', 'exercise'] },
+  history: { tab: 'Historical Data', label: 'Historical Data',
+    cols: { date: /^date/, day: /^day$/, category: /^category$/, exercise: /^exercise$/, set: /^set( ?#| no\.?)?$/,
+            targetReps: /^target reps?$/, actualReps: /^actual reps?$/, targetWgt: /^target (wgt|weight)/,
+            actualWgt: /^actual (wgt|weight)/, notes: /^notes?$/, plan: /^plan( name)?$/ },
+    names: { date: 'Date', day: 'Day', category: 'Category', exercise: 'Exercise', set: 'Set', targetReps: 'Target Reps',
+             actualReps: 'Actual Reps', targetWgt: 'Target Wgt', actualWgt: 'Actual Wgt', notes: 'Notes', plan: 'Plan Name' },
+    required: ['date', 'day', 'category', 'exercise', 'set', 'targetReps', 'actualReps', 'targetWgt', 'actualWgt', 'notes', 'plan'] },
+};
+
+/* ============================ state ============================ */
+const state = {
+  ds: null,                 // data source (Google or Demo)
+  token: null, tokenExpiry: 0, tokenClient: null, pendingToken: null,
+  sheet: null,              // { id, name }
+  model: null,              // parsed workbook
+  checks: [],
+  day: null,
+  entries: [],
+  restored: false,
+  saving: false,
+  authLost: false,
+};
+
+/* ============================ helpers ============================ */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const norm = v => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+const uid = () => Math.random().toString(36).slice(2, 10);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const q = title => `'${title.replace(/'/g, "''")}'`;
+const colLetter = i => { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+const num = v => { const t = String(v ?? '').trim(); if (t === '') return ''; const n = Number(t.replace(',', '.')); return Number.isFinite(n) ? n : t; };
+const isFilled = s => String(s.reps).trim() !== '' || String(s.wgt).trim() !== '';
+const pad = n => String(n).padStart(2, '0');
+const toSheetDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;   // date only, no time
+const toLocalInput = toSheetDate;
+// Rest in the Plan sheet: small numbers are minutes (e.g. 1), larger are seconds (e.g. 90).
+const fmtRest = r => { const n = Number(r); if (!Number.isFinite(n) || String(r).trim() === '') return String(r); return n <= 5 ? `${n} min` : `${n}s`; };
+
+const store = {
+  get(k, d = null) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+const draftKey = day => `wl:draft:${state.sheet?.id}:${day}`;
+
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms);
+}
+function openModal(html) { $('#modalBody').innerHTML = html; $('#modal').classList.add('open'); }
+function closeModal() { $('#modal').classList.remove('open'); $('#modalBody').innerHTML = ''; }
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+class AuthError extends Error {}
+
+/* ============================ Google auth ============================ */
+function waitFor(test, timeout = 15000) {
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    (function poll() { if (test()) return resolve(); if (Date.now() - t0 > timeout) return reject(new Error('Google scripts did not load. Check your connection.')); setTimeout(poll, 100); })();
+  });
+}
+function loadScript(src) {
+  return new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = resolve; s.onerror = () => reject(new Error('Failed to load ' + src)); document.head.appendChild(s); });
+}
+async function initGoogle() {
+  await Promise.all([loadScript('https://accounts.google.com/gsi/client'), loadScript('https://apis.google.com/js/api.js')]);
+  await waitFor(() => window.google?.accounts?.oauth2 && window.gapi);
+  state.tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CONFIG.CLIENT_ID, scope: SCOPES,
+    callback: r => {
+      const p = state.pendingToken; state.pendingToken = null;
+      if (r.error) return p?.reject(new Error(r.error_description || r.error));
+      state.token = r.access_token; state.tokenExpiry = Date.now() + (Number(r.expires_in || 3600) - 60) * 1000;
+      state.authLost = false; p?.resolve();
+    },
+    error_callback: e => { const p = state.pendingToken; state.pendingToken = null; p?.reject(new Error(e?.type === 'popup_closed' ? 'Sign-in window was closed.' : (e?.message || 'Sign-in failed.'))); },
+  });
+  await new Promise(r => gapi.load('picker', r));
+}
+// Must be called directly from a click so the popup isn't blocked.
+function requestToken() {
+  return new Promise((resolve, reject) => { state.pendingToken = { resolve, reject }; state.tokenClient.requestAccessToken({ prompt: '' }); });
+}
+const tokenValid = () => state.token && Date.now() < state.tokenExpiry;
+
+async function gfetch(url, opts = {}) {
+  if (!tokenValid()) throw new AuthError('Your Google session expired.');
+  const res = await fetch(url, { ...opts, headers: { Authorization: 'Bearer ' + state.token, 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+  if (res.status === 401) { state.token = null; throw new AuthError('Your Google session expired.'); }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { const err = new Error(body.error?.message || `${res.status} ${res.statusText}`); err.status = res.status; throw err; }
+  return body;
+}
+
+const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets/';
+const GoogleSource = {
+  async meta(id) {
+    const j = await gfetch(`${SHEETS}${id}?fields=properties.title,sheets.properties(sheetId,title,sheetType,gridProperties(rowCount,columnCount))`);
+    // Dashboard/chart tabs aren't grids and have no gridProperties, so skip them.
+    return { title: j.properties.title, sheets: (j.sheets || [])
+      .filter(s => !s.properties.sheetType || s.properties.sheetType === 'GRID')
+      .map(s => ({ title: s.properties.title, sheetId: s.properties.sheetId, rowCount: s.properties.gridProperties?.rowCount ?? 0 })) };
+  },
+  async batchGet(id, ranges) {
+    const qs = ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
+    const j = await gfetch(`${SHEETS}${id}/values:batchGet?${qs}&valueRenderOption=FORMATTED_VALUE`);
+    return (j.valueRanges || []).map(v => v.values || []);
+  },
+  async addRows(id, sheetId, n) {
+    await gfetch(`${SHEETS}${id}:batchUpdate`, { method: 'POST', body: JSON.stringify({ requests: [{ appendDimension: { sheetId, dimension: 'ROWS', length: n } }] }) });
+  },
+  async update(id, range, values) {
+    await gfetch(`${SHEETS}${id}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, { method: 'PUT', body: JSON.stringify({ range, majorDimension: 'ROWS', values }) });
+  },
+};
+
+function openPicker() {
+  const view = new google.picker.DocsView(google.picker.ViewId.SPREADSHEETS).setMode(google.picker.DocsViewMode.LIST);
+  const picker = new google.picker.PickerBuilder()
+    .addView(view)
+    .setOAuthToken(state.token)
+    .setDeveloperKey(CONFIG.API_KEY)
+    .setAppId(CONFIG.APP_ID)
+    .setTitle('Choose your workout tracker sheet')
+    .setCallback(d => {
+      if (d.action === google.picker.Action.PICKED) { const doc = d.docs[0]; loadSheet(doc.id, doc.name); }
+    })
+    .build();
+  picker.setVisible(true);
+}
+
+/* ============================ parsing & validation ============================ */
+function findHeader(rows, spec) {
+  let best = { score: -1, map: {}, row: -1 };
+  for (let r = 0; r < Math.min(rows.length, 20); r++) {
+    const row = rows[r] || []; const map = {};
+    for (const [key, re] of Object.entries(spec.cols)) {
+      const idx = row.findIndex(c => re.test(norm(c)));
+      if (idx >= 0) map[key] = idx;
+    }
+    const score = spec.required.filter(k => k in map).length;
+    if (score === spec.required.length) return { ok: true, row: r, map };
+    if (score > best.score) best = { score, map, row: r };
+  }
+  return { ok: false, missing: spec.required.filter(k => !(k in best.map)).map(k => spec.names[k]) };
+}
+
+function parseWorkbook(meta, raw, tabs) {
+  const checks = [];
+  const add = (level, msg, detail) => checks.push({ level, msg, detail });
+  const m = { title: meta.title, plan: [], days: [], planName: '', library: [], libByName: new Map(), libCats: new Map(), categories: [], history: null, historyRows: [], prev: new Map() };
+
+  // --- tabs exist
+  for (const key of Object.keys(SCHEMA)) {
+    if (!tabs[key]) add('error', `Tab “${SCHEMA[key].tab}” is missing.`);
+  }
+
+  // --- Settings (exercise library)
+  if (raw.settings) {
+    const h = findHeader(raw.settings, SCHEMA.settings);
+    if (!h.ok) add('error', `Couldn't find the header row in “${tabs.settings.title}”.`, `Missing columns: ${h.missing.join(', ')}`);
+    else {
+      const seen = new Map(); const dups = new Set();
+      for (const r of raw.settings.slice(h.row + 1)) {
+        const ex = String(r[h.map.exercise] ?? '').trim(); if (!ex) continue;
+        const item = { category: String(r[h.map.category] ?? '').trim(), exercise: ex, video: h.map.video != null ? String(r[h.map.video] ?? '').trim() : '' };
+        m.library.push(item);
+        const k = norm(ex);
+        if (!m.libCats.has(k)) m.libCats.set(k, []);
+        m.libCats.get(k).push(item.category);
+        if (seen.has(k)) { dups.add(ex); if (!m.libByName.get(k).video && item.video) m.libByName.set(k, item); }
+        else { seen.set(k, item); m.libByName.set(k, item); }
+      }
+      const cats = new Map(); m.library.forEach(i => { const k = norm(i.category); if (k && !cats.has(k)) cats.set(k, i.category); });
+      m.categories = [...cats.values()].sort((a, b) => a.localeCompare(b));
+      add('ok', `Exercise library: ${m.library.length} exercises in ${m.categories.length} categories.`);
+      if (dups.size) add('info', `${dups.size} exercise(s) are listed more than once in the library.`, [...dups].join(', '));
+    }
+  }
+
+  // --- Plan
+  if (raw.plan) {
+    const h = findHeader(raw.plan, SCHEMA.plan);
+    if (!h.ok) add('error', `Couldn't find the header row in “${tabs.plan.title}”.`, `Missing columns: ${h.missing.join(', ')}`);
+    else {
+      // Plan name: a cell like "Plan Name:" above the header, value in the next non-empty cell
+      for (const r of raw.plan.slice(0, h.row)) {
+        const i = (r || []).findIndex(c => norm(c).startsWith('plan name'));
+        if (i >= 0) { const v = r.slice(i + 1).find(c => String(c ?? '').trim() !== ''); if (v != null) m.planName = String(v); break; }
+      }
+      if (!m.planName) add('warn', 'No “Plan Name:” cell found above the Plan table. Saved rows will have an empty Plan Name.');
+      const badSets = [];
+      raw.plan.slice(h.row + 1).forEach((r, i) => {
+        const day = String(r[h.map.day] ?? '').trim(); const ex = String(r[h.map.exercise] ?? '').trim();
+        if (!day || !ex) return;
+        const get = k => h.map[k] != null ? String(r[h.map[k]] ?? '').trim() : '';
+        const p = { day, category: get('category'), exercise: ex, sets: get('sets'), reps: get('reps'), rest: get('rest'), notes: get('notes'), video: get('video'), row: h.row + i + 2 };
+        if (!(parseInt(p.sets) > 0)) badSets.push(`row ${p.row}: ${ex}`);
+        m.plan.push(p);
+        if (!m.days.includes(day)) m.days.push(day);
+      });
+      if (!m.plan.length) add('error', 'The Plan tab has no exercises.');
+      else add('ok', `Plan “${m.planName.trim() || 'unnamed'}”: ${m.days.length} day(s) — ${m.days.join(', ')} — with ${m.plan.length} exercises.`);
+      if (badSets.length) add('warn', `${badSets.length} plan row(s) have no valid “# Sets” (they'll start with 1 set).`, badSets.join('\n'));
+
+      if (m.library.length) {
+        const missing = [...new Set(m.plan.filter(p => !m.libByName.has(norm(p.exercise))).map(p => p.exercise))];
+        if (missing.length) add('warn', `${missing.length} plan exercise(s) aren't in the Settings library.`, missing.join(', '));
+        else add('ok', 'Every plan exercise exists in the Settings library.');
+        // Only flag when no library entry with that name has the plan's category (duplicates under several categories are fine).
+        const catMismatch = [...new Set(m.plan.filter(p => { const cats = m.libCats.get(norm(p.exercise)); return cats && !cats.some(c => norm(c) === norm(p.category)); })
+          .map(p => `${p.exercise}: plan says “${p.category}”, library says “${m.libCats.get(norm(p.exercise)).join('” / “')}”`))];
+        if (catMismatch.length) add('warn', `${catMismatch.length} plan exercise(s) have a different category than in the library.`, catMismatch.join('\n'));
+      }
+      const noVideo = [...new Set(m.plan.filter(p => !p.video && !m.libByName.get(norm(p.exercise))?.video).map(p => p.exercise))];
+      if (noVideo.length) add('info', `${noVideo.length} plan exercise(s) have no video link.`, noVideo.join(', '));
+    }
+  }
+
+  // --- Historical Data
+  if (raw.history) {
+    const h = findHeader(raw.history, SCHEMA.history);
+    if (!h.ok) add('error', `Couldn't find the header row in “${tabs.history.title}”.`, `Missing columns: ${h.missing.join(', ')}`);
+    else {
+      m.history = { title: tabs.history.title, sheetId: tabs.history.sheetId, rowCount: tabs.history.rowCount, headerRow: h.row, map: h.map };
+      raw.history.slice(h.row + 1).forEach(r => {
+        const ex = String(r[h.map.exercise] ?? '').trim(); if (!ex) return;
+        addHistory(m, { date: r[h.map.date] ?? '', exercise: ex, set: String(r[h.map.set] ?? '').trim(), reps: String(r[h.map.actualReps] ?? '').trim(), wgt: String(r[h.map.actualWgt] ?? '').trim(), notes: String(r[h.map.notes] ?? '').trim() });
+      });
+      const last = m.historyRows.length ? m.historyRows[m.historyRows.length - 1].date : null;
+      add('ok', `Historical Data: ${m.historyRows.length} logged sets${last ? `, last entry ${last}` : ''}. New sets will be added below them.`);
+    }
+  }
+  return { model: m, checks };
+}
+
+function addHistory(m, r) {
+  m.historyRows.push(r);
+  m.prev.set(`${norm(r.exercise)}|${r.set}`, r);   // later rows overwrite → "most recent"
+}
+const prevFor = (ex, setNo) => state.model.prev.get(`${norm(ex)}|${setNo}`) || null;
+const libVideo = ex => state.model.libByName.get(norm(ex))?.video || '';
+
+/* ============================ flows ============================ */
+async function loadSheet(id, name) {
+  state.sheet = { id, name };
+  $('#sheetName').textContent = name || '';
+  renderLoading('Reading and checking your sheet…');
+  try {
+    const meta = await state.ds.meta(id);
+    state.sheet.name = meta.title; $('#sheetName').textContent = meta.title;
+    const tabs = {};
+    for (const [key, spec] of Object.entries(SCHEMA)) tabs[key] = meta.sheets.find(s => norm(s.title) === norm(spec.tab)) || null;
+    const keys = Object.keys(tabs).filter(k => tabs[k]);
+    const values = await state.ds.batchGet(id, keys.map(k => `${q(tabs[k].title)}!A1:Z`));
+    const raw = {}; keys.forEach((k, i) => raw[k] = values[i]);
+    const { model, checks } = parseWorkbook(meta, raw, tabs);
+    state.model = model; state.checks = checks;
+    if (!DEMO) store.set('wl:lastSheet', { id, name: meta.title });
+    renderValidation();
+  } catch (e) {
+    if (e instanceof AuthError) return renderSignin(e.message);
+    const msg = (e.status === 403 || e.status === 404)
+      ? 'This app can\'t open that sheet yet. Choose it with “Pick a sheet” so Google grants access to it.'
+      : e.message;
+    renderPick(msg);
+  }
+}
+
+function startLogging(day) {
+  state.day = day;
+  store.set(`wl:lastDay:${state.sheet.id}`, day);
+  const draft = store.get(draftKey(day));
+  if (draft?.entries?.length) { state.entries = draft.entries; state.restored = true; }
+  else { state.entries = entriesForDay(day); state.restored = false; }
+  renderLogger();
+}
+function entriesForDay(day) { return state.model.plan.filter(p => p.day === day).map(p => makeEntry(p, false)); }
+function makeEntry(p, adhoc) {
+  const n = Math.max(1, Math.min(20, parseInt(p.sets) || 1));
+  return { uid: uid(), exercise: p.exercise, category: p.category, targetReps: p.reps, rest: p.rest || '', notes: p.notes || '',
+           video: p.video || libVideo(p.exercise), adhoc, sets: Array.from({ length: n }, () => ({ reps: '', wgt: '', note: '', showNote: false })) };
+}
+let draftTimer;
+function saveDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    const any = state.entries.some(e => e.adhoc || e.sets.some(s => isFilled(s) || s.note));
+    if (any) store.set(draftKey(state.day), { entries: state.entries, at: Date.now() }); else store.del(draftKey(state.day));
+    document.querySelectorAll('.day').forEach(b => b.classList.toggle('draft', !!store.get(draftKey(b.dataset.day))));
+  }, 300);
+}
+
+function collectRows(when) {
+  const rows = [];
+  for (const e of state.entries) e.sets.forEach((s, j) => {
+    if (!isFilled(s)) return;
+    const p = prevFor(e.exercise, j + 1);
+    const wgt = num(s.wgt);
+    rows.push({ date: when, day: state.day, category: e.category, exercise: e.exercise, set: j + 1,
+      targetReps: num(e.targetReps), actualReps: num(s.reps),
+      targetWgt: p && String(p.wgt).trim() !== '' ? num(p.wgt) : wgt,   // target = last session's weight for this set
+      actualWgt: wgt, notes: (s.note || '').trim(), plan: state.model.planName });
+  });
+  return rows;
+}
+
+async function writeRows(objs) {
+  const H = state.model.history, id = state.sheet.id;
+  const cols = Object.values(H.map), minCol = Math.min(...cols), maxCol = Math.max(...cols);
+  // Re-read the tab right before writing so we append after the true last row.
+  const meta = await state.ds.meta(id);
+  const tab = meta.sheets.find(s => s.sheetId === H.sheetId) || meta.sheets.find(s => s.title === H.title);
+  const [fresh] = await state.ds.batchGet(id, [`${q(tab.title)}!A1:${colLetter(maxCol)}`]);
+  const lastUsed = Math.max(fresh.length, H.headerRow + 1);          // 1-based
+  const start = lastUsed + 1, end = start + objs.length - 1;
+  if (end > tab.rowCount) await state.ds.addRows(id, tab.sheetId, end - tab.rowCount + 20);
+  const values = objs.map(o => {
+    const row = Array(maxCol - minCol + 1).fill(null);                // null = leave cell untouched
+    for (const [k, idx] of Object.entries(H.map)) row[idx - minCol] = o[k] ?? '';
+    return row;
+  });
+  const range = `${q(tab.title)}!${colLetter(minCol)}${start}:${colLetter(maxCol)}${end}`;
+  await state.ds.update(id, range, values);
+  return range;
+}
+
+async function doSave(whenStr) {
+  const rows = collectRows(whenStr);
+  if (!rows.length) return;
+  state.saving = true; updateSaveBar();
+  try {
+    const range = await writeRows(rows);
+    rows.forEach(r => addHistory(state.model, { date: r.date, exercise: r.exercise, set: String(r.set), reps: String(r.actualReps), wgt: String(r.actualWgt), notes: r.notes }));
+    store.del(draftKey(state.day));
+    closeModal();
+    state.entries = entriesForDay(state.day); state.restored = false;
+    renderLogger();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast(`Saved ${rows.length} set${rows.length > 1 ? 's' : ''} to Historical Data`);
+    if (DEMO) showDemoWrite(range, rows);
+  } catch (e) {
+    closeModal();
+    if (e instanceof AuthError) { state.authLost = true; renderLogger(); }
+    else { toast('Save failed: ' + e.message, 5000); }
+  } finally { state.saving = false; updateSaveBar(); }
+}
+
+/* ============================ rendering ============================ */
+function setChrome({ menu = false, savebar = false } = {}) {
+  $('#menuBtn').hidden = !menu; $('#savebar').hidden = !savebar;
+}
+function renderLoading(msg) {
+  setChrome();
+  $('#app').innerHTML = `<div class="panel center"><div class="spinner"></div><div class="muted">${esc(msg)}</div></div>`;
+}
+function renderSetup() {
+  setChrome();
+  $('#app').innerHTML = `<div class="panel"><h2>Almost ready</h2>
+    <p class="muted">Add your Google Cloud <code>CLIENT_ID</code>, <code>API_KEY</code> and <code>APP_ID</code> at the top of <code>index.html</code> (see README).</p>
+    <p class="muted">Meanwhile you can try the app with sample data, nothing is sent to Google:</p>
+    <a class="btn" href="?demo" style="display:inline-block;text-decoration:none">Open demo</a></div>`;
+}
+function renderSignin(err) {
+  setChrome();
+  const last = store.get('wl:lastSheet');
+  $('#app').innerHTML = `<div class="panel"><h2>Log your workout</h2>
+    <p class="muted">Sign in with Google, then pick your tracker sheet. The app only gets access to the sheet you pick.</p>
+    ${err ? `<div class="banner err">${esc(err)}</div>` : ''}
+    ${last ? `<p class="small muted">Last sheet: <b>${esc(last.name)}</b></p>` : ''}
+    <button class="btn block" data-act="signin">Sign in with Google</button></div>`;
+}
+function renderPick(err) {
+  setChrome({ menu: true });
+  const last = store.get('wl:lastSheet');
+  $('#app').innerHTML = `<div class="panel"><h2>Choose your tracker</h2>
+    <p class="muted">Pick the Google Sheet that holds your Plan, Settings and Historical Data tabs.</p>
+    ${err ? `<div class="banner err">${esc(err)}</div>` : ''}
+    <div class="row">
+      <button class="btn" data-act="pick">Pick a sheet</button>
+      ${last ? `<button class="btn ghost" data-act="openlast">Open “${esc(last.name)}”</button>` : ''}
+    </div></div>`;
+}
+function renderValidation() {
+  setChrome({ menu: true });
+  const errs = state.checks.filter(c => c.level === 'error').length, warns = state.checks.filter(c => c.level === 'warn').length;
+  const order = { error: 0, warn: 1, ok: 2, info: 3 };
+  const list = [...state.checks].sort((a, b) => order[a.level] - order[b.level]);
+  $('#app').innerHTML = `<div class="panel"><h2>${errs ? 'This sheet doesn\'t match the expected format' : warns ? 'Sheet looks usable, with a few warnings' : 'Sheet checks passed'}</h2>
+    <p class="muted small">${esc(state.sheet.name)}</p>
+    <ul class="checks">${list.map(c => `<li><span class="dot ${c.level}"></span><div>${esc(c.msg)}${c.detail ? `<details><summary>Details</summary><div style="white-space:pre-line">${esc(c.detail)}</div></details>` : ''}</div></li>`).join('')}</ul>
+    <div class="row">
+      ${errs ? '' : `<button class="btn" data-act="continue">Start logging</button>`}
+      ${DEMO ? '' : `<button class="btn ghost" data-act="pick">Choose another sheet</button>`}
+    </div></div>`;
+}
+function renderLogger() {
+  setChrome({ menu: true, savebar: true });
+  const m = state.model;
+  $('#app').innerHTML = `
+    <div class="session-head">
+      <div class="plan-name">${esc(m.planName.trim() || m.title)}</div>
+      <div class="days">${m.days.map(d => `<button class="day ${d === state.day ? 'active' : ''} ${store.get(draftKey(d)) ? 'draft' : ''}" data-act="day" data-day="${esc(d)}">${esc(d)}</button>`).join('')}</div>
+    </div>
+    ${state.authLost ? `<div class="banner err"><span>Your Google session expired. Your entries are kept.</span><button class="btn" data-act="reauth">Sign in</button></div>` : ''}
+    ${state.restored ? `<div class="banner"><span>Restored your unsaved entries for ${esc(state.day)}.</span><button class="text-btn" data-act="discard">Discard</button></div>` : ''}
+    <div id="cards">${state.entries.map(cardHTML).join('')}</div>
+    <button class="add-ex" data-act="adhoc">+ Add exercise (not in plan)</button>
+    <p class="small muted center" style="margin-top:18px">Tap a “Previous” value to copy it into the set. Only sets with reps or weight are saved.</p>`;
+  updateSaveBar();
+}
+function cardHTML(e, i) {
+  const has = e.sets.some(isFilled);
+  return `<section class="card ${has ? 'has' : ''}" id="card-${i}">
+    <div class="card-head">
+      <div class="titles">
+        <span class="chip">${esc(e.category || '—')}</span>${e.adhoc ? '<span class="chip adhoc">Added</span>' : ''}
+        <h3>${esc(e.exercise)}</h3>
+        <div class="meta">${e.sets.length} set${e.sets.length > 1 ? 's' : ''} × ${esc(e.targetReps || '—')} reps${e.rest ? ` · Rest ${esc(fmtRest(e.rest))}` : ''}</div>
+      </div>
+      ${e.video ? `<button class="icon-btn video" data-act="video" data-i="${i}" aria-label="Watch exercise video">▶</button>` : ''}
+    </div>
+    ${e.notes ? `<p class="note" dir="auto">${esc(e.notes)}</p>` : ''}
+    <div class="sets">
+      <div class="set-row head"><span class="center">Set</span><span>Previous</span><span class="center">Reps</span><span class="center">kg</span><span></span></div>
+      ${e.sets.map((s, j) => setHTML(e, i, s, j)).join('')}
+    </div>
+    <div class="card-foot">
+      <button class="text-btn" data-act="addset" data-i="${i}">+ Set</button>
+      ${e.sets.length > 1 ? `<button class="text-btn" data-act="rmset" data-i="${i}">− Set</button>` : ''}
+      ${e.adhoc ? `<span style="flex:1"></span><button class="text-btn danger" data-act="rmex" data-i="${i}">Remove</button>` : ''}
+    </div>
+  </section>`;
+}
+function setHTML(e, i, s, j) {
+  const p = prevFor(e.exercise, j + 1);
+  const prevTxt = p ? `${p.reps || '–'} @ ${p.wgt || 0}${p.notes ? ' · ' + p.notes : ''}` : '—';
+  const a = `data-i="${i}" data-j="${j}"`;
+  return `<div class="set-row ${isFilled(s) ? 'done' : ''}" ${a}>
+      <span class="set-no">${j + 1}</span>
+      <button class="prev" data-act="fill" ${a} ${p ? '' : 'disabled'} title="${p ? 'Copy into this set' : 'No previous data'}">${esc(prevTxt)}</button>
+      <input inputmode="numeric" data-f="reps" ${a} value="${esc(s.reps)}" placeholder="${esc(e.targetReps)}" aria-label="Set ${j + 1} reps">
+      <input inputmode="decimal" data-f="wgt" ${a} value="${esc(s.wgt)}" placeholder="${esc(p?.wgt ?? '')}" aria-label="Set ${j + 1} weight">
+      <button class="icon-btn small ${s.note ? 'on' : ''}" data-act="note" ${a} aria-label="Note for set ${j + 1}">✎</button>
+    </div>
+    ${s.showNote || s.note ? `<div class="set-note"><input data-f="note" ${a} value="${esc(s.note)}" placeholder="Note for set ${j + 1} (e.g. Failure)" dir="auto"></div>` : ''}`;
+}
+function rerenderCard(i) {
+  const el = document.getElementById('card-' + i);
+  if (el) el.outerHTML = cardHTML(state.entries[i], i);
+  updateSaveBar();
+}
+function updateSaveBar() {
+  if ($('#savebar').hidden) return;
+  const sets = state.entries.reduce((n, e) => n + e.sets.filter(isFilled).length, 0);
+  const exs = state.entries.filter(e => e.sets.some(isFilled)).length;
+  $('#saveCount').innerHTML = sets ? `<b>${sets}</b> set${sets > 1 ? 's' : ''} · <b>${exs}</b> exercise${exs > 1 ? 's' : ''}` : 'Nothing logged yet';
+  $('#saveBtn').disabled = !sets || state.saving || state.authLost;
+  $('#saveBtn').textContent = state.saving ? 'Saving…' : 'Save workout';
+}
+
+/* ---------- modals ---------- */
+function youtubeId(url) {
+  const m = String(url).match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+function showVideo(e) {
+  const id = youtubeId(e.video);
+  if (!id) { window.open(e.video, '_blank', 'noopener'); return; }
+  const isShort = /\/shorts\//.test(e.video);
+  openModal(`<h3>${esc(e.exercise)}</h3>
+    <div class="frame ${isShort ? '' : 'wide'}"><iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+    <div class="row"><a class="btn ghost" href="${esc(e.video)}" target="_blank" rel="noopener">Open on YouTube</a><span style="flex:1"></span><button class="btn" data-act="close">Close</button></div>`);
+}
+function showAdhoc() {
+  const cats = state.model.categories;
+  if (!state.model.library.length) { toast('The Settings library is empty.'); return; }
+  openModal(`<h3>Add an exercise</h3>
+    <p class="muted small" style="margin-top:-6px">It's saved under ${esc(state.day)} like the planned ones.</p>
+    <div class="field"><label>Category</label><select id="ahCat">${cats.map(c => `<option>${esc(c)}</option>`).join('')}</select></div>
+    <div class="field"><label>Exercise</label><select id="ahEx"></select></div>
+    <div class="two">
+      <div class="field"><label>Sets</label><input id="ahSets" type="number" min="1" max="20" value="3" inputmode="numeric"></div>
+      <div class="field"><label>Target reps</label><input id="ahReps" type="number" min="0" value="10" inputmode="numeric"></div>
+    </div>
+    <div class="row"><button class="btn" data-act="adhoc-add">Add</button><button class="btn ghost" data-act="close">Cancel</button></div>`);
+  const fill = () => {
+    const c = norm($('#ahCat').value);
+    $('#ahEx').innerHTML = state.model.library.map((it, idx) => ({ it, idx })).filter(x => norm(x.it.category) === c)
+      .sort((a, b) => a.it.exercise.localeCompare(b.it.exercise))
+      .map(x => `<option value="${x.idx}">${esc(x.it.exercise)}</option>`).join('');
+  };
+  $('#ahCat').addEventListener('change', fill); fill();
+}
+function addAdhoc() {
+  const it = state.model.library[Number($('#ahEx').value)];
+  if (!it) return;
+  const e = makeEntry({ exercise: it.exercise, category: it.category, sets: $('#ahSets').value, reps: $('#ahReps').value, video: it.video }, true);
+  state.entries.push(e); closeModal(); renderLogger(); saveDraft();
+  document.getElementById('card-' + (state.entries.length - 1))?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function showConfirm() {
+  const items = state.entries.filter(e => e.sets.some(isFilled));
+  openModal(`<h3>Save ${esc(state.day)}?</h3>
+    <ul class="summary">${items.map(e => `<li><span>${esc(e.exercise)}${e.adhoc ? ' <span class="chip adhoc">Added</span>' : ''}</span><span class="muted">${e.sets.filter(isFilled).length} set(s)</span></li>`).join('')}</ul>
+    <div class="field"><label>Session date</label><input id="when" type="date" value="${toLocalInput(new Date())}"></div>
+    <div class="row"><button class="btn" data-act="confirm-save">Save to Historical Data</button><button class="btn ghost" data-act="close">Back</button></div>`);
+}
+function showDemoWrite(range, rows) {
+  const H = SCHEMA.history.names;
+  const keys = ['date', 'day', 'category', 'exercise', 'set', 'targetReps', 'actualReps', 'targetWgt', 'actualWgt', 'notes', 'plan'];
+  openModal(`<h3>Demo: rows written</h3><p class="muted small">Range ${esc(range)}. With a real sheet these go to Historical Data.</p>
+    <div style="overflow:auto"><table class="preview"><tr>${keys.map(k => `<th>${esc(H[k])}</th>`).join('')}</tr>
+    ${rows.map(r => `<tr>${keys.map(k => `<td>${esc(r[k])}</td>`).join('')}</tr>`).join('')}</table></div>
+    <button class="btn" data-act="close">OK</button>`);
+}
+function showMenu() {
+  openModal(`<h3>Menu</h3>
+    ${state.model ? `<button class="btn ghost block" data-act="show-checks" style="margin-bottom:10px">Sheet check results</button>` : ''}
+    ${DEMO ? `<a class="btn ghost block" href="./" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px">Leave demo</a>` :
+      `<button class="btn ghost block" data-act="pick" style="margin-bottom:10px">Choose another sheet</button>
+       <button class="btn ghost block" data-act="signout" style="margin-bottom:10px">Sign out</button>`}
+    <button class="btn block" data-act="close">Close</button>`);
+}
+
+/* ============================ events ============================ */
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('[data-act]'); if (!t) return;
+  const act = t.dataset.act, i = Number(t.dataset.i), j = Number(t.dataset.j);
+  const e = state.entries[i];
+  switch (act) {
+    case 'close': closeModal(); break;
+    case 'signin':
+      try { await requestToken(); const last = store.get('wl:lastSheet'); last ? loadSheet(last.id, last.name) : renderPick(); }
+      catch (err) { renderSignin(err.message); }
+      break;
+    case 'reauth':
+      try { await requestToken(); state.authLost = false; renderLogger(); toast('Signed in again, tap Save'); } catch (err) { toast(err.message); }
+      break;
+    case 'pick':
+      closeModal();
+      if (!tokenValid()) { try { await requestToken(); } catch (err) { return renderSignin(err.message); } }
+      openPicker(); break;
+    case 'openlast': { const last = store.get('wl:lastSheet'); if (last) loadSheet(last.id, last.name); break; }
+    case 'signout':
+      closeModal();
+      if (state.token) google.accounts.oauth2.revoke(state.token, () => {});
+      state.token = null; state.model = null; state.sheet = null; $('#sheetName').textContent = '';
+      renderSignin(); break;
+    case 'show-checks': closeModal(); renderValidation(); break;
+    case 'continue': {
+      const last = store.get(`wl:lastDay:${state.sheet.id}`);
+      startLogging(state.model.days.includes(last) ? last : state.model.days[0]); break;
+    }
+    case 'day': if (t.dataset.day !== state.day) { saveDraft(); startLogging(t.dataset.day); window.scrollTo({ top: 0 }); } break;
+    case 'discard':
+      if (confirm(`Discard the unsaved entries for ${state.day}?`)) { store.del(draftKey(state.day)); state.entries = entriesForDay(state.day); state.restored = false; renderLogger(); }
+      break;
+    case 'video': showVideo(e); break;
+    case 'fill': {
+      const p = prevFor(e.exercise, j + 1); if (!p) break;
+      e.sets[j].reps = p.reps; e.sets[j].wgt = p.wgt; rerenderCard(i); saveDraft(); break;
+    }
+    case 'note': e.sets[j].showNote = !e.sets[j].showNote || !!e.sets[j].note; rerenderCard(i);
+      document.querySelector(`.set-note input[data-i="${i}"][data-j="${j}"]`)?.focus(); break;
+    case 'addset': e.sets.push({ reps: '', wgt: '', note: '', showNote: false }); rerenderCard(i); saveDraft(); break;
+    case 'rmset': if (e.sets.length > 1) { e.sets.pop(); rerenderCard(i); saveDraft(); } break;
+    case 'rmex': state.entries.splice(i, 1); renderLogger(); saveDraft(); break;
+    case 'adhoc': showAdhoc(); break;
+    case 'adhoc-add': addAdhoc(); break;
+    case 'confirm-save': {
+      const v = $('#when').value;   // already YYYY-MM-DD
+      doSave(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : toSheetDate(new Date())); break;
+    }
+  }
+});
+document.addEventListener('input', ev => {
+  const t = ev.target; if (!t.dataset.f) return;
+  const i = Number(t.dataset.i), j = Number(t.dataset.j), s = state.entries[i]?.sets[j]; if (!s) return;
+  s[t.dataset.f] = t.value;
+  const row = t.closest('.set-row'); if (row) row.classList.toggle('done', isFilled(s));
+  document.getElementById('card-' + i)?.classList.toggle('has', state.entries[i].sets.some(isFilled));
+  updateSaveBar(); saveDraft();
+});
+$('#saveBtn').addEventListener('click', () => { if (!$('#saveBtn').disabled) showConfirm(); });
+$('#menuBtn').addEventListener('click', showMenu);
+
+/* ============================ demo data ============================ */
+const DemoSource = (() => {
+  const P = (d, c, e, s, r, rest, n, v) => ['', d, c, e, s, r, rest, n, v];
+  const yt = id => id ? 'https://youtube.com/shorts/' + id : '';
+  const plan = [
+    ['', 'Trainee Workout Planner'], [], ['', 'Plan Name:', 'upper A - lower A - upper B - lower B '],
+    ['', 'Day', 'Category', 'Exercise', '# Sets', 'Target Reps', 'Rest', 'Notes', 'Exercise Video link'],
+    P('upper A', 'mobility', 'thoracic mobility', 1, 15, 1, '', 'https://www.youtube.com/watch?v=hhvHpsxKjXw'),
+    P('upper A', 'chest', 'neutral grip incline db press', 3, 10, 120, '', yt('OJMnnGUbjzM')),
+    P('upper A', 'back', 'chest supported db row', 3, 12, 90, '', yt('2ByilQ4NaAs')),
+    P('upper A', 'arms', 'triceps overhead', 4, 15, 60, '', yt('9Ark9S11uXw')),
+    P('upper A', 'shoulder', 'bottom up kettlebell carry', 3, 20, 90, '20 متر لكل يد', yt('mLyUd0Dsim4')),
+    P('lower A', 'mobility', '90 90', 1, 30, 1, '', 'https://www.youtube.com/watch?v=t4Zz6-aG8Iw'),
+    P('lower A', 'legs', 'spanish squats', 3, 15, 90, 'استخدم استك خلف الركبة لتخفيف الضغط علي الوتر', yt('YiloyW-QDig')),
+    P('lower A', 'legs', 'bulgrian split squat', 3, 10, 90, 'لكل رجل', yt('or1frhkjBDc')),
+    P('lower A', 'legs', 'lying leg curl', 3, 10, 90, '', ''),
+    P('lower A', 'legs', 'calf raise machine', 3, 15, 1, 'ثبات ثانية في الاغلي', yt('1cvpm--Y-4I')),
+    P('upper B', 'chest', 'flat dumbell floor press', 4, 10, 90, '', yt('k8fvMnz42-g')),
+    P('upper B', 'shoulder', 'lateral raise DB', 3, 15, 90, '', yt('iK22GwXJji0')),
+    P('lower B', 'legs', 'romanian deadlift', 3, 10, 120, '', ''),
+    P('lower B', 'legs', 'hip thrust machine', 4, 12, 90, '', yt('sxOrVuCvWq4')),
+  ];
+  const settings = [['Category', 'Exercise', 'Video Link'],
+    ...plan.slice(4).map(r => [r[2], r[3], r[8]]),
+    ['arms', 'hammer curl', 'https://www.youtube.com/shorts/VuEclXR7sZY'],
+    ['core', 'plank', 'https://www.youtube.com/shorts/xe2MXatLTUw'],
+    ['core', 'side plank', 'https://youtube.com/shorts/Ye7G1wQCMgk'],
+    ['shoulder', 'face pull', 'https://youtube.com/shorts/zi7waeqXpzw'],
+    ['cardio', 'incline treadmill', 'https://youtube.com/shorts/HwXYMPGjlUg']];
+  const Hr = (dt, d, c, e, s, tr, ar, tw, aw, n = '') => ['', dt, d, c, e, s, tr, ar, tw, aw, n, 'upper A - lower A - upper B - lower B '];
+  const history = [['', '', 'Trainee Workout Historical Data'], [], [],
+    ['', 'Date', 'Day', 'Category', 'Exercise', 'Set', 'Target Reps', 'Actual Reps', 'Target Wgt', 'Actual Wgt', 'Notes', 'Plan Name'],
+    ...[1, 2, 3].map(s => Hr('11/5/2026 18:02:11', 'lower A', 'legs', 'lying leg curl', s, 10, 12, 23, 23)),
+    ...[1, 2, 3].map(s => Hr('11/5/2026 18:02:11', 'lower A', 'legs', 'calf raise machine', s, 15, 12, 160, 160)),
+    ...[1, 2, 3, 4].map(s => Hr('11/12/2026 14:40:03', 'upper A', 'arms', 'triceps overhead', s, 15, s === 4 ? 8 : 12, 9, 9, s === 4 ? 'Failure' : '')),
+    ...[1, 2, 3].map(s => Hr('11/12/2026 14:40:03', 'upper A', 'shoulder', 'bottom up kettlebell carry', s, 20, 20, 8, 8))];
+  const book = { title: 'Demo — Workout Tracker', tabs: { 'Plan': plan, 'Settings': settings, 'Historical Data': history, 'Tracker': [] } };
+  const ids = { 'Plan': 1, 'Settings': 2, 'Historical Data': 3, 'Tracker': 0 };
+  const tabOf = range => range.match(/^'((?:[^']|'')+)'!/)[1].replace(/''/g, "'");
+  return {
+    async meta() { await sleep(250); return { title: book.title, sheets: Object.keys(book.tabs).map(t => ({ title: t, sheetId: ids[t], rowCount: Math.max(1000, book.tabs[t].length) })) }; },
+    async batchGet(id, ranges) { await sleep(250); return ranges.map(r => book.tabs[tabOf(r)].map(row => row.map(c => String(c ?? '')))); },
+    async addRows() {},
+    async update(id, range, values) {
+      await sleep(300);
+      const tab = book.tabs[tabOf(range)];
+      const [, col, row] = range.match(/!([A-Z]+)(\d+)/);
+      const c0 = col.split('').reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+      values.forEach((r, k) => { const target = tab[Number(row) - 1 + k] = tab[Number(row) - 1 + k] || []; r.forEach((v, x) => { if (v !== null) target[c0 + x] = v; }); });
+      window.__demoBook = book;
+    },
+  };
+})();
+
+/* ============================ boot ============================ */
+(async function boot() {
+  if (DEMO) {
+    state.ds = DemoSource;
+    document.querySelector('.brand').insertAdjacentHTML('beforeend', ' <span class="chip adhoc">Demo</span>');
+    return loadSheet('demo', 'Demo — Workout Tracker');
+  }
+  if (/^YOUR_/.test(CONFIG.CLIENT_ID) || /^YOUR_/.test(CONFIG.API_KEY) || /^YOUR_/.test(CONFIG.APP_ID)) return renderSetup();
+  if (location.protocol === 'file:') {
+    setChrome();
+    $('#app').innerHTML = `<div class="panel"><h2>Run it from a local server</h2><p class="muted">Google sign-in doesn't work from a file. In this folder run <code>python3 -m http.server 8000</code> and open <a href="http://localhost:8000">http://localhost:8000</a>.</p></div>`;
+    return;
+  }
+  state.ds = GoogleSource;
+  renderLoading('Loading Google sign-in…');
+  try { await initGoogle(); renderSignin(); }
+  catch (e) { renderSignin(e.message); }
+})();
+</script>
+</body>
+</html>
