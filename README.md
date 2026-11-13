@@ -50,6 +50,8 @@ These values are safe to put in a public page. The client ID is public by design
 
 Run `python3 -m http.server 8000` again, open <http://localhost:8000>, sign in, and pick your tracker.
 
+> **On phones:** Google's file picker often fails in mobile browsers because it needs third-party cookies. Pick the sheet once on a computer, then on the phone paste the sheet's link into "Or paste the sheet's link". Access is tied to your Google account, not the device.
+
 > While the app is in Testing mode, Google shows a "Google hasn't verified this app" screen. Click **Continue**. Sign-ins only last about an hour, after which the app asks you to sign in again; your entries are kept.
 
 ## Publish on GitHub Pages

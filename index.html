@@ -163,6 +163,7 @@ const CONFIG = {
 // drive.file = the app can only touch files you pick with the Picker.
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 const DEMO = new URLSearchParams(location.search).has('demo');
+const isMobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 /* Expected sheet layout. Header rows are found automatically (first 20 rows). */
 const SCHEMA = {
@@ -440,7 +441,9 @@ async function loadSheet(id, name) {
   } catch (e) {
     if (e instanceof AuthError) return renderSignin(e.message);
     const msg = (e.status === 403 || e.status === 404)
-      ? 'This app can\'t open that sheet yet. Choose it with “Pick a sheet” so Google grants access to it.'
+      ? (isMobile
+          ? 'This app doesn\'t have access to that sheet yet. Open the app on a computer and choose the sheet once with “Pick a sheet”; after that, the link works on your phone too.'
+          : 'This app can\'t open that sheet yet. Choose it with “Pick a sheet” so Google grants access to it.')
       : e.message;
     renderPick(msg);
   }
@@ -555,10 +558,20 @@ function renderPick(err) {
   $('#app').innerHTML = `<div class="panel"><h2>Choose your tracker</h2>
     <p class="muted">Pick the Google Sheet that holds your Plan, Settings and Historical Data tabs.</p>
     ${err ? `<div class="banner err">${esc(err)}</div>` : ''}
+    ${isMobile ? `<div class="banner">Google's file picker often fails in phone browsers. Pick your sheet once on a computer, then paste its link below; access carries over to this phone.</div>` : ''}
     <div class="row">
-      <button class="btn" data-act="pick">Pick a sheet</button>
+      <button class="btn ${isMobile ? 'ghost' : ''}" data-act="pick">Pick a sheet</button>
       ${last ? `<button class="btn ghost" data-act="openlast">Open “${esc(last.name)}”</button>` : ''}
-    </div></div>`;
+    </div>
+    <div class="field" style="margin-top:18px"><label>Or paste the sheet's link</label>
+      <div class="row" style="flex-wrap:nowrap"><input id="sheetUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1">
+      <button class="btn" data-act="openurl">Open</button></div></div>
+    </div>`;
+}
+function sheetIdFrom(text) {
+  const t = String(text || '').trim();
+  const m = t.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/);
+  return m ? m[1] : (/^[A-Za-z0-9_-]{20,}$/.test(t) ? t : null);
 }
 function renderValidation() {
   setChrome({ menu: true });
@@ -720,6 +733,12 @@ document.addEventListener('click', async ev => {
       closeModal();
       if (!tokenValid()) { try { await requestToken(); } catch (err) { return renderSignin(err.message); } }
       openPicker(); break;
+    case 'openurl': {
+      const id = sheetIdFrom($('#sheetUrl')?.value);
+      if (!id) { toast('That doesn\'t look like a Google Sheets link.'); break; }
+      if (!tokenValid()) { try { await requestToken(); } catch (err) { return renderSignin(err.message); } }
+      loadSheet(id, ''); break;
+    }
     case 'openlast': { const last = store.get('wl:lastSheet'); if (last) loadSheet(last.id, last.name); break; }
     case 'signout':
       closeModal();
