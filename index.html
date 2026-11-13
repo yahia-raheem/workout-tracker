@@ -30,6 +30,9 @@
   main { max-width: 720px; margin: 0 auto; padding: 16px 14px 8px; }
   .site-foot { max-width: 720px; margin: 0 auto; padding: 8px 14px 110px; text-align: center; font-size: 13px; color: var(--muted); }
   .site-foot a { color: var(--muted); }
+  .guide { padding-left: 22px; margin: 12px 0; }
+  .guide li { margin: 8px 0; }
+  #pickerHelp { margin-top: 0; }
   #pickerClose { position: fixed; top: max(12px, env(safe-area-inset-top)); right: 12px; z-index: 2147483647; border: 0; border-radius: 999px;
     padding: 10px 16px; font-weight: 700; background: var(--accent); color: var(--accent-ink); box-shadow: 0 4px 16px rgba(0,0,0,.4); }
   .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin: 18px 0; }
@@ -169,6 +172,58 @@ const CONFIG = {
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 const DEMO = new URLSearchParams(location.search).has('demo');
 const isMobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+/* Which browser/device this is, and whether it blocks the cookies Google's picker needs by default. */
+const ENV = (() => {
+  const ua = navigator.userAgent;
+  const ipad = /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  const ios = ipad || /iPhone|iPod/.test(ua);
+  const android = /Android/.test(ua);
+  let browser = 'other';
+  if (ios) browser = /CriOS/.test(ua) ? 'chrome' : /FxiOS/.test(ua) ? 'firefox' : /EdgiOS/.test(ua) ? 'edge' : /OPiOS|OPT\//.test(ua) ? 'opera' : (/Safari\//.test(ua) && !/GSA\//.test(ua)) ? 'safari' : 'other';
+  else if (/SamsungBrowser/.test(ua)) browser = 'samsung';
+  else if (/Firefox\//.test(ua)) browser = 'firefox';
+  else if (/Edg(A|e)?\//.test(ua)) browser = 'edge';
+  else if (/OPR\//.test(ua)) browser = 'opera';
+  else if (/Chrome\//.test(ua)) browser = 'chrome';
+  else if (/Safari\//.test(ua)) browser = 'safari';
+  const os = ios ? 'ios' : android ? 'android' : 'desktop';
+  const names = { safari: 'Safari', chrome: 'Chrome', firefox: 'Firefox', edge: 'Edge', samsung: 'Samsung Internet', opera: 'Opera', other: 'your browser' };
+  const device = ios ? (ipad ? 'iPad' : 'iPhone') : android ? 'Android' : 'this computer';
+  const name = names[browser];
+  const label = browser === 'samsung' ? name : `${name} on ${device}`;
+  // Every iPhone/iPad browser and Safari on Mac block third-party cookies by default.
+  const likelyBlocked = ios || browser === 'safari';
+  return { os, browser, name, device, label, likelyBlocked };
+})();
+
+function cookieGuide() {
+  const { os, browser, name } = ENV;
+  const back = 'Come back to this page, tap <b>I\'ve changed it, open the picker</b> and choose your sheet.';
+  if (os === 'ios' && browser === 'safari') return {
+    steps: ['Open the iPhone <b>Settings</b> app → <b>Apps</b> → <b>Safari</b> (on iOS 17 or older: Settings → <b>Safari</b>).',
+            'Turn <b>off</b> <b>Prevent Cross-Site Tracking</b>. Also check that <b>Block All Cookies</b> (under <b>Advanced</b>) is off.', back],
+    revert: 'Once your sheet opens, you can turn Prevent Cross-Site Tracking back on. You only need to pick each sheet once.' };
+  if (os === 'ios') return {
+    steps: [`Open the iPhone <b>Settings</b> app → <b>Apps</b> → <b>${name}</b>.`,
+            '<b>Turn on Allow Cross-Website Tracking</b>. If it isn\'t listed, tap “Try the picker anyway” once, then look again.', back],
+    revert: 'Once your sheet opens, you can turn Allow Cross-Website Tracking back off. You only need to pick each sheet once.' };
+  if (os === 'android') {
+    const s = {
+      chrome: ['Tap <b>⋮</b> → <b>Settings</b> → <b>Privacy and security</b> → <b>Third-party cookies</b>.', 'Choose <b>Allow third-party cookies</b>. (This doesn\'t work in an Incognito tab.)'],
+      samsung: ['Tap <b>≡</b> → <b>Settings</b> → <b>Sites and downloads</b> → <b>Site permissions</b> → <b>Cookies</b> (names can differ slightly by version).', 'Choose <b>Allow all cookies</b>, or turn off <b>Block third-party cookies</b>.'],
+      firefox: ['Tap the <b>shield icon</b> next to the address bar.', 'Turn <b>off Enhanced Tracking Protection</b> for this site. The page reloads.'],
+      edge: ['Tap <b>≡</b> → <b>Settings</b> → <b>Privacy, security and services</b> → <b>Cookies</b>.', 'Allow cookies, and turn off <b>Block third-party cookies</b>.'],
+    }[browser] || ['Open your browser\'s settings and allow <b>third-party cookies</b>.', 'Or open this page in <b>Chrome</b>, where they\'re allowed by default.'];
+    return { steps: [...s, back], revert: 'After your sheet opens you can change the setting back. You only need to pick each sheet once.' };
+  }
+  const d = {
+    safari: ['In Safari, open <b>Safari → Settings → Privacy</b>.', 'Untick <b>Prevent cross-site tracking</b>.'],
+    chrome: ['Open <b>Settings → Privacy and security → Third-party cookies</b>.', 'Choose <b>Allow third-party cookies</b>, or add <code>[*.]google.com</code> under “Allowed to use third-party cookies”.'],
+    edge: ['Open <b>Settings → Cookies and site permissions → Manage and delete cookies</b>.', 'Turn off <b>Block third-party cookies</b>, or allow <code>[*.]google.com</code>.'],
+    firefox: ['Click the <b>shield icon</b> next to the address bar.', 'Turn <b>off Enhanced Tracking Protection</b> for this site.'],
+  }[browser] || ['Open your browser\'s privacy settings.', 'Allow <b>third-party cookies</b>, at least for <code>google.com</code>.'];
+  return { steps: [...d, back], revert: 'After your sheet opens you can change the setting back. You only need to pick each sheet once.' };
+}
 
 /* Expected sheet layout. Header rows are found automatically (first 20 rows). */
 const SCHEMA = {
@@ -311,6 +366,7 @@ function openPicker() {
     .setCallback(d => {
       if (d.action === google.picker.Action.PICKED) { closePicker(); const doc = d.docs[0]; loadSheet(doc.id, doc.name); }
       else if (d.action === google.picker.Action.CANCEL) closePicker();
+      else if (google.picker.Action.ERROR && d.action === google.picker.Action.ERROR) { closePicker(); showGuide('error'); }
     })
     .build();
   state.picker = picker;
@@ -318,8 +374,32 @@ function openPicker() {
   // Google's picker has no way out when it fails to load (e.g. blocked cookies), so always offer one.
   const x = document.createElement('button');
   x.id = 'pickerClose'; x.type = 'button'; x.textContent = '✕ Close picker';
-  x.addEventListener('click', closePicker);
+  x.addEventListener('click', () => { closePicker(); offerPickerHelp(); });
   document.body.appendChild(x);
+}
+// After the picker is closed by hand, ask (without blocking) whether it failed.
+function offerPickerHelp() {
+  document.getElementById('pickerHelp')?.remove();
+  $('#app').insertAdjacentHTML('afterbegin', `<div class="banner" id="pickerHelp"><span>Did the picker show “We can't access this content”?</span><button class="text-btn" data-act="guide" data-reason="error">How to fix it</button></div>`);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function showGuide(reason = 'pre') {
+  const g = cookieGuide();
+  const head = {
+    pre: [`One step before picking`, `${esc(ENV.label)} blocks the cookies Google's file picker needs, so it would show <i>“We can't access this content”</i>. A one-time settings change fixes it:`],
+    error: [`Google's picker couldn't load`, `${esc(ENV.label)} is most likely blocking the cookies Google's file picker needs. To fix it:`],
+    noaccess: [`Give the app access to your sheet`, `The app can only open a sheet after you've chosen it once with Google's picker. On ${esc(ENV.label)} that may need a one-time settings change:`],
+  }[reason] || [];
+  openModal(`<h3 style="text-transform:none">${head[0]}</h3>
+    <p class="muted" style="margin-top:-4px">${head[1]}</p>
+    <ol class="guide">${g.steps.map(t => `<li>${t}</li>`).join('')}</ol>
+    <p class="small muted">${esc(g.revert)}</p>
+    <div style="display:grid;gap:10px;margin-top:14px">
+      <button class="btn block" data-act="pick-now">I've changed it, open the picker</button>
+      ${reason === 'pre' ? `<button class="btn ghost block" data-act="pick-now">Try the picker anyway</button>` : ''}
+      <button class="btn ghost block" data-act="close">Close</button>
+    </div>
+    <p class="small muted" style="margin-bottom:0">No luck? Sign in to this app on any computer (a private window on a friend's laptop is fine) and pick the sheet once. After that, its link opens on this ${ENV.os === 'desktop' ? 'browser' : 'phone'} without the picker.</p>`);
 }
 function closePicker() {
   try { state.picker?.setVisible(false); state.picker?.dispose(); } catch {}
@@ -458,12 +538,8 @@ async function loadSheet(id, name) {
     renderValidation();
   } catch (e) {
     if (e instanceof AuthError) return renderSignin(e.message);
-    const msg = (e.status === 403 || e.status === 404)
-      ? (isMobile
-          ? 'This app doesn\'t have access to that sheet yet. Open the app on a computer and choose the sheet once with “Pick a sheet”; after that, the link works on your phone too.'
-          : 'This app can\'t open that sheet yet. Choose it with “Pick a sheet” so Google grants access to it.')
-      : e.message;
-    renderPick(msg);
+    const noAccess = e.status === 403 || e.status === 404;
+    renderPick(noAccess ? 'This app doesn\'t have access to that sheet yet. Choose it once with “Pick a sheet”; after that, its link works on any device.' : e.message, { noAccess });
   }
 }
 
@@ -571,21 +647,21 @@ function renderSignin(err) {
     <button class="btn block" data-act="signin">Sign in with Google</button>
     <p class="small muted center" style="margin:12px 0 0">By signing in you agree to how the app uses your data, as described in the <a href="privacy.html">Privacy Policy</a>.</p></div>`;
 }
-function renderPick(err) {
+function renderPick(err, { noAccess = false } = {}) {
   setChrome({ menu: true });
   const last = store.get('wl:lastSheet');
   $('#app').innerHTML = `<div class="panel"><h2>Choose your tracker</h2>
     <p class="muted">Pick the Google Sheet that holds your Plan, Settings and Historical Data tabs.</p>
-    ${err ? `<div class="banner err">${esc(err)}</div>` : ''}
-    ${isMobile ? `<p class="small muted">Google's file picker doesn't work in phone browsers, so on a phone you open a sheet by its link. The first time, choose the sheet once on a computer; after that its link works here.</p>` : ''}
-    ${isMobile && !last ? '' : `<div class="row">
-      ${isMobile ? '' : `<button class="btn" data-act="pick">Pick a sheet</button>`}
+    ${err ? `<div class="banner err"><span>${esc(err)}</span>${noAccess ? `<button class="text-btn" data-act="guide" data-reason="noaccess">How?</button>` : ''}</div>` : ''}
+    ${ENV.likelyBlocked && !err ? `<div class="banner"><span>On ${esc(ENV.label)}, Google's picker needs a one-time settings change.</span><button class="text-btn" data-act="guide" data-reason="pre">Show me</button></div>` : ''}
+    <div class="row">
+      <button class="btn" data-act="pick">Pick a sheet</button>
       ${last ? `<button class="btn ghost" data-act="openlast">Open “${esc(last.name)}”</button>` : ''}
-    </div>`}
-    <div class="field" style="margin-top:18px"><label>${isMobile ? 'Paste the sheet\'s link' : 'Or paste the sheet\'s link'}</label>
+    </div>
+    <div class="field" style="margin-top:18px"><label>Or paste the sheet's link</label>
       <div class="row" style="flex-wrap:nowrap"><input id="sheetUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1">
       <button class="btn" data-act="openurl">Open</button></div>
-      ${isMobile ? `<p class="small muted" style="margin:8px 0 0">In the Google Sheets app: open the sheet → ⋮ → Share &amp; export → Copy link.</p>` : ''}</div>
+      <p class="small muted" style="margin:8px 0 0">Works for sheets you've already picked once with this Google account, on any device.${isMobile ? ' To copy a link in the Google Sheets app: open the sheet → ⋮ → Share &amp; export → Copy link.' : ''}</p></div>
     ${state.model ? `<button class="text-btn" data-act="back-to-log">← Back to logging</button>` : ''}
     </div>`;
 }
@@ -753,8 +829,15 @@ document.addEventListener('click', async ev => {
       break;
     case 'change-sheet': closeModal(); renderPick(); window.scrollTo({ top: 0 }); break;
     case 'back-to-log': state.day ? renderLogger() : renderValidation(); break;
+    case 'guide': closeModal(); showGuide(t.dataset.reason); break;
+    case 'pick-now':
+      closeModal(); state.guideSeen = true;
+      if (!tokenValid()) { try { await requestToken(); } catch (err) { return renderSignin(err.message); } }
+      openPicker(); break;
     case 'pick':
       closeModal();
+      // Browsers known to block the picker get the fix-it steps first (once per visit).
+      if (ENV.likelyBlocked && !state.guideSeen) { state.guideSeen = true; showGuide('pre'); break; }
       if (!tokenValid()) { try { await requestToken(); } catch (err) { return renderSignin(err.message); } }
       openPicker(); break;
     case 'openurl': {

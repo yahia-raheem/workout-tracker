@@ -50,7 +50,7 @@ These values are safe to put in a public page. The client ID is public by design
 
 Run `python3 -m http.server 8000` again, open <http://localhost:8000>, sign in, and pick your tracker.
 
-> **On phones:** Google's file picker often fails in mobile browsers because it needs third-party cookies. Pick the sheet once on a computer, then on the phone paste the sheet's link into "Or paste the sheet's link". Access is tied to your Google account, not the device.
+> **On phones:** Google's file picker needs third-party cookies. Every iPhone browser and Safari on Mac block them by default, and some Android browsers do too. The app recognises the browser and shows step-by-step fix instructions before opening the picker (iPhone, Safari), when the picker reports an error, or when you close it without picking. The setting can be switched back once the sheet has been picked. After a sheet has been picked once with a Google account, on any device, its link can be pasted into "Or paste the sheet's link" without the picker.
 
 > While the app is in Testing mode, Google shows a "Google hasn't verified this app" screen. Click **Continue**. Sign-ins only last about an hour, after which the app asks you to sign in again; your entries are kept.
 
