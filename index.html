@@ -30,6 +30,8 @@
   main { max-width: 720px; margin: 0 auto; padding: 16px 14px 8px; }
   .site-foot { max-width: 720px; margin: 0 auto; padding: 8px 14px 110px; text-align: center; font-size: 13px; color: var(--muted); }
   .site-foot a { color: var(--muted); }
+  #pickerClose { position: fixed; top: max(12px, env(safe-area-inset-top)); right: 12px; z-index: 2147483647; border: 0; border-radius: 999px;
+    padding: 10px 16px; font-weight: 700; background: var(--accent); color: var(--accent-ink); box-shadow: 0 4px 16px rgba(0,0,0,.4); }
   .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; margin: 18px 0; }
   .panel h2 { margin: 0 0 6px; font-size: 20px; }
   .muted { color: var(--muted); }
@@ -191,6 +193,7 @@ const SCHEMA = {
 /* ============================ state ============================ */
 const state = {
   ds: null,                 // data source (Google or Demo)
+  picker: null,
   token: null, tokenExpiry: 0, tokenClient: null, pendingToken: null,
   sheet: null,              // { id, name }
   model: null,              // parsed workbook
@@ -306,10 +309,22 @@ function openPicker() {
     .setAppId(CONFIG.APP_ID)
     .setTitle('Choose your workout tracker sheet')
     .setCallback(d => {
-      if (d.action === google.picker.Action.PICKED) { const doc = d.docs[0]; loadSheet(doc.id, doc.name); }
+      if (d.action === google.picker.Action.PICKED) { closePicker(); const doc = d.docs[0]; loadSheet(doc.id, doc.name); }
+      else if (d.action === google.picker.Action.CANCEL) closePicker();
     })
     .build();
+  state.picker = picker;
   picker.setVisible(true);
+  // Google's picker has no way out when it fails to load (e.g. blocked cookies), so always offer one.
+  const x = document.createElement('button');
+  x.id = 'pickerClose'; x.type = 'button'; x.textContent = '✕ Close picker';
+  x.addEventListener('click', closePicker);
+  document.body.appendChild(x);
+}
+function closePicker() {
+  try { state.picker?.setVisible(false); state.picker?.dispose(); } catch {}
+  state.picker = null;
+  document.getElementById('pickerClose')?.remove();
 }
 
 /* ============================ parsing & validation ============================ */
@@ -562,14 +577,16 @@ function renderPick(err) {
   $('#app').innerHTML = `<div class="panel"><h2>Choose your tracker</h2>
     <p class="muted">Pick the Google Sheet that holds your Plan, Settings and Historical Data tabs.</p>
     ${err ? `<div class="banner err">${esc(err)}</div>` : ''}
-    ${isMobile ? `<div class="banner">Google's file picker often fails in phone browsers. Pick your sheet once on a computer, then paste its link below; access carries over to this phone.</div>` : ''}
-    <div class="row">
-      <button class="btn ${isMobile ? 'ghost' : ''}" data-act="pick">Pick a sheet</button>
+    ${isMobile ? `<p class="small muted">Google's file picker doesn't work in phone browsers, so on a phone you open a sheet by its link. The first time, choose the sheet once on a computer; after that its link works here.</p>` : ''}
+    ${isMobile && !last ? '' : `<div class="row">
+      ${isMobile ? '' : `<button class="btn" data-act="pick">Pick a sheet</button>`}
       ${last ? `<button class="btn ghost" data-act="openlast">Open “${esc(last.name)}”</button>` : ''}
-    </div>
-    <div class="field" style="margin-top:18px"><label>Or paste the sheet's link</label>
+    </div>`}
+    <div class="field" style="margin-top:18px"><label>${isMobile ? 'Paste the sheet\'s link' : 'Or paste the sheet\'s link'}</label>
       <div class="row" style="flex-wrap:nowrap"><input id="sheetUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1">
-      <button class="btn" data-act="openurl">Open</button></div></div>
+      <button class="btn" data-act="openurl">Open</button></div>
+      ${isMobile ? `<p class="small muted" style="margin:8px 0 0">In the Google Sheets app: open the sheet → ⋮ → Share &amp; export → Copy link.</p>` : ''}</div>
+    ${state.model ? `<button class="text-btn" data-act="back-to-log">← Back to logging</button>` : ''}
     </div>`;
 }
 function sheetIdFrom(text) {
@@ -587,7 +604,7 @@ function renderValidation() {
     <ul class="checks">${list.map(c => `<li><span class="dot ${c.level}"></span><div>${esc(c.msg)}${c.detail ? `<details><summary>Details</summary><div style="white-space:pre-line">${esc(c.detail)}</div></details>` : ''}</div></li>`).join('')}</ul>
     <div class="row">
       ${errs ? '' : `<button class="btn" data-act="continue">Start logging</button>`}
-      ${DEMO ? '' : `<button class="btn ghost" data-act="pick">Choose another sheet</button>`}
+      ${DEMO ? '' : `<button class="btn ghost" data-act="change-sheet">Choose another sheet</button>`}
     </div></div>`;
 }
 function renderLogger() {
@@ -714,7 +731,7 @@ function showMenu() {
   openModal(`<h3>Menu</h3>
     ${state.model ? `<button class="btn ghost block" data-act="show-checks" style="margin-bottom:10px">Sheet check results</button>` : ''}
     ${DEMO ? `<a class="btn ghost block" href="./" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px">Leave demo</a>` :
-      `<button class="btn ghost block" data-act="pick" style="margin-bottom:10px">Choose another sheet</button>
+      `<button class="btn ghost block" data-act="change-sheet" style="margin-bottom:10px">Choose another sheet</button>
        <button class="btn ghost block" data-act="signout" style="margin-bottom:10px">Sign out</button>`}
     <a class="btn ghost block" href="privacy.html" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px">Privacy Policy</a>
     <button class="btn block" data-act="close">Close</button>`);
@@ -734,6 +751,8 @@ document.addEventListener('click', async ev => {
     case 'reauth':
       try { await requestToken(); state.authLost = false; renderLogger(); toast('Signed in again, tap Save'); } catch (err) { toast(err.message); }
       break;
+    case 'change-sheet': closeModal(); renderPick(); window.scrollTo({ top: 0 }); break;
+    case 'back-to-log': state.day ? renderLogger() : renderValidation(); break;
     case 'pick':
       closeModal();
       if (!tokenValid()) { try { await requestToken(); } catch (err) { return renderSignin(err.message); } }
