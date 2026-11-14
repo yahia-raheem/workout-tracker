@@ -1,0 +1,7 @@
+{
+  "_note": "PT mode password check. Only a PBKDF2-SHA256 hash of the password is stored here, never the password. To change the password, generate a new salt and hash (see README) and replace these values; everyone in PT mode is then locked out until they enter the new one.",
+  "algorithm": "PBKDF2-SHA256",
+  "iterations": 310000,
+  "salt": "BaYdUfQkQIG2wJJ1APmH6Q==",
+  "hash": "Dkf0NQDWGhSIydtvHOACMPcCCV1nfcNgmqOItZb9vTQ="
+}

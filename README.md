@@ -62,7 +62,7 @@ Run `python3 -m http.server 8000` again, open <http://localhost:8000>, sign in, 
 
 ## Insights
 
-The **Insights** tab (next to **Log workout**) builds dashboards from your sheet. Everything is calculated in the browser each time you open it, or when you tap **↻ Refresh**:
+The **Insights** tab (next to **Log workout**, in PT mode only) builds dashboards from your sheet. Everything is calculated in the browser each time you open it, or when you tap **↻ Refresh**:
 
 - **Highlights**: plain-language takeaways, such as workouts per week vs the 4 weeks before, the next day in your rotation, days you haven't trained in a while, exercises where you hit every target rep (ready to go heavier), your most improved and stalled lifts, how your sets split across muscle groups, and body changes since your first measurement.
 - **Summary tiles and Workouts per week**, for the last 4 weeks, the last 12 weeks or all time.
@@ -75,6 +75,22 @@ The same status shows on each exercise card in **Log workout** (Go heavier, New 
 - **Body**: latest values and changes from the *Body Data* tab (weight, body fat, lean and fat mass, waist, waist-to-height), plus trend charts. The app looks for a header row with at least `Date` and `Weight`.
 
 Every chart has hover/tap tooltips and a **Show data** table.
+
+## PT mode
+
+Insights are for the PT (and the owner) only. On the sign-in screen, or the sheet screen, tick **PT mode** and enter the PT password. The device then stays in PT mode until you choose **Exit PT mode** in the menu, or **Turn off** on the sign-in screen.
+
+- Without PT mode there is no Insights tab, and `insights.js` (the dashboards) is never loaded into the page.
+- The Go heavier / New best / Stalled hints on the Log workout cards come from `progress.js` and show for everyone.
+- The password itself is not stored anywhere. `pt-config.json` holds only a PBKDF2-SHA256 hash of it (310,000 iterations, random salt).
+- This is a lock against ordinary users, not a security boundary. The site is static, so someone technical could still open the dashboards with browser tools.
+- To try it without a password: `?demo` shows the trainee view and `?demo&pt` shows the PT view.
+
+**Changing the password.** Run this, then replace `pt-config.json` with its output and push. Every device in PT mode is locked again until the new password is entered.
+
+```bash
+python3 -c "import hashlib,os,base64,json,getpass; s=os.urandom(16); p=getpass.getpass('New PT password: ').encode(); print(json.dumps({'algorithm':'PBKDF2-SHA256','iterations':310000,'salt':base64.b64encode(s).decode(),'hash':base64.b64encode(hashlib.pbkdf2_hmac('sha256',p,s,310000)).decode()},indent=2))"
+```
 
 ## Privacy policy
 

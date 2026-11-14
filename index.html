@@ -89,6 +89,14 @@
   .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #cfd3da; background: var(--card2); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
   .b-ic { font-size: 10px; color: var(--muted); }
   .legend-line { margin-top: 10px; line-height: 2; }
+  .pt-box { background: var(--card2); border-radius: 12px; padding: 12px 14px; margin: 14px 0; display: block; }
+  .pt-box:has(> span) { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .pt-box .text-btn { white-space: nowrap; }
+  .pt-check { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
+  .pt-check input { width: 18px; height: 18px; accent-color: var(--accent); }
+  #ptPw { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-width: 0; }
+  #ptPw:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .err-text { color: var(--err); }
   .pickers { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 10px 0 14px; }
   @media (min-width: 520px) { .pickers { grid-template-columns: 1fr 2fr; } }
   .pickers label { font-size: 12px; color: var(--muted); min-width: 0; }
@@ -592,6 +600,74 @@ function addHistory(m, r) {
 const prevFor = (ex, setNo) => state.model.prev.get(`${norm(ex)}|${setNo}`) || null;
 const libVideo = ex => state.model.libByName.get(norm(ex))?.video || '';
 
+/* ============================ PT mode ============================ */
+// The Insights dashboards are for the PT (and the owner) only. The password is never stored:
+// pt-config.json holds a PBKDF2 hash of it, and a device stays unlocked until "Exit PT mode".
+const PT_KEY = 'wl:pt';
+let ptCfg = null;
+const b64ToBytes = b => Uint8Array.from(atob(b), c => c.charCodeAt(0));
+const bytesToB64 = u => btoa(String.fromCharCode(...u));
+async function ptConfig() {
+  if (!ptCfg) { const r = await fetch('pt-config.json', { cache: 'no-cache' }); if (!r.ok) throw new Error('PT settings not found'); ptCfg = await r.json(); }
+  return ptCfg;
+}
+async function ptHash(password, cfg) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: b64ToBytes(cfg.salt), iterations: cfg.iterations }, key, 256);
+  return bytesToB64(new Uint8Array(bits));
+}
+const ptActive = () => state.pt === true;
+async function loadPtModule() { if (typeof renderInsights !== 'function') await loadScript('insights.js'); }
+async function initPt() {
+  if (DEMO) state.pt = new URLSearchParams(location.search).has('pt');
+  else {
+    const saved = store.get(PT_KEY);
+    if (saved) {
+      try { state.pt = saved === (await ptConfig()).hash; } catch { state.pt = false; }
+      if (!state.pt) store.del(PT_KEY);      // password was changed: lock again
+    }
+  }
+  if (state.pt) { try { await loadPtModule(); } catch { state.pt = false; } }
+  ptMark();
+}
+async function unlockPt(password) {
+  const cfg = await ptConfig();
+  if ((await ptHash(password, cfg)) !== cfg.hash) return false;
+  store.set(PT_KEY, cfg.hash); state.pt = true;
+  await loadPtModule(); ptMark();
+  return true;
+}
+function exitPt() { store.del(PT_KEY); location.reload(); }   // reload so the dashboard code leaves the page
+function ptMark() {
+  document.getElementById('ptChip')?.remove();
+  if (ptActive()) document.querySelector('.brand').insertAdjacentHTML('beforeend', ' <span class="chip adhoc" id="ptChip">PT</span>');
+}
+function ptBlockHTML() {
+  if (DEMO) return '';
+  if (ptActive()) return `<div class="pt-box"><span><b>PT mode is on.</b> <span class="muted">Insights are available on this device.</span></span><button class="text-btn" data-act="pt-exit">Turn off</button></div>`;
+  return `<div class="pt-box" id="ptBox">
+    <label class="pt-check"><input type="checkbox" id="ptCheck"> PT mode <span class="muted small">(for the PT: unlocks Insights)</span></label>
+    <div id="ptForm" hidden>
+      <div class="row" style="flex-wrap:nowrap;margin-top:10px">
+        <input id="ptPw" type="password" autocomplete="current-password" placeholder="PT password" style="flex:1">
+        <button class="btn" data-act="pt-unlock">Unlock</button>
+      </div>
+      <div class="small" id="ptMsg" style="margin-top:6px"></div>
+    </div>
+  </div>`;
+}
+async function tryUnlock() {
+  const pw = $('#ptPw')?.value || ''; const msg = $('#ptMsg');
+  if (!pw) { msg.textContent = 'Enter the PT password.'; return; }
+  msg.textContent = 'Checking…'; msg.className = 'small muted';
+  try {
+    if (await unlockPt(pw)) { $('#ptBox').outerHTML = ptBlockHTML(); toast('PT mode unlocked'); }
+    else { msg.textContent = 'Wrong password. You can still continue without PT mode.'; msg.className = 'small err-text'; $('#ptPw').select(); }
+  } catch (e) { msg.textContent = 'Couldn\'t check the password: ' + e.message; msg.className = 'small err-text'; }
+}
+document.addEventListener('change', e => { if (e.target.id === 'ptCheck') { $('#ptForm').hidden = !e.target.checked; if (e.target.checked) $('#ptPw').focus(); } });
+document.addEventListener('keydown', e => { if (e.target.id === 'ptPw' && e.key === 'Enter') { e.preventDefault(); tryUnlock(); } });
+
 /* ============================ flows ============================ */
 async function loadSheet(id, name) {
   state.sheet = { id, name };
@@ -718,6 +794,7 @@ function renderSignin(err) {
     <p class="muted">Sign in with Google, then pick your tracker sheet. The app only gets access to the sheet you pick.</p>
     ${err ? `<div class="banner err">${esc(err)}</div>` : ''}
     ${last ? `<p class="small muted">Last sheet: <b>${esc(last.name)}</b></p>` : ''}
+    ${ptBlockHTML()}
     <button class="btn block" data-act="signin">Sign in with Google</button>
     <p class="small muted center" style="margin:12px 0 0">By signing in you agree to how the app uses your data, as described in the <a href="privacy.html">Privacy Policy</a>.</p></div>`;
 }
@@ -736,6 +813,7 @@ function renderPick(err, { noAccess = false } = {}) {
       <div class="row" style="flex-wrap:nowrap"><input id="sheetUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1">
       <button class="btn" data-act="openurl">Open</button></div>
       <p class="small muted" style="margin:8px 0 0">Works for sheets you've already picked once with this Google account, on any device.${isMobile ? ' To copy a link in the Google Sheets app: open the sheet → ⋮ → Share &amp; export → Copy link.' : ''}</p></div>
+    ${ptBlockHTML()}
     ${state.model ? `<button class="text-btn" data-act="back-to-log">← Back to logging</button>` : ''}
     </div>`;
 }
@@ -758,6 +836,7 @@ function renderValidation() {
     </div></div>`;
 }
 function tabsHTML(active) {
+  if (!ptActive() || typeof renderInsights !== 'function') return '';   // trainees: no Insights tab at all
   return `<nav class="tabs" role="tablist"><button class="${active === 'log' ? 'on' : ''}" data-act="tab" data-tab="log" role="tab">Log workout</button><button class="${active === 'insights' ? 'on' : ''}" data-act="tab" data-tab="insights" role="tab">Insights</button></nav>`;
 }
 function renderLogger() {
@@ -887,7 +966,8 @@ function showMenu() {
     ${state.model ? `<button class="btn ghost block" data-act="show-checks" style="margin-bottom:10px">Sheet check results</button>` : ''}
     ${DEMO ? `<a class="btn ghost block" href="./" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px">Leave demo</a>` :
       `<button class="btn ghost block" data-act="change-sheet" style="margin-bottom:10px">Choose another sheet</button>
-       <button class="btn ghost block" data-act="signout" style="margin-bottom:10px">Sign out</button>`}
+       <button class="btn ghost block" data-act="signout" style="margin-bottom:10px">Sign out</button>
+       ${ptActive() ? `<button class="btn ghost block" data-act="pt-exit" style="margin-bottom:10px">Exit PT mode</button>` : ''}`}
     <a class="btn ghost block" href="privacy.html" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px">Privacy Policy</a>
     <button class="btn block" data-act="close">Close</button>`);
 }
@@ -909,10 +989,12 @@ document.addEventListener('click', async ev => {
     case 'change-sheet': closeModal(); renderPick(); window.scrollTo({ top: 0 }); break;
     case 'back-to-log': state.day ? renderLogger() : renderValidation(); break;
     case 'tab':
-      if (t.dataset.tab === 'insights') { saveDraft(); store.set('wl:tab', 'insights'); renderInsights(); }
+      if (t.dataset.tab === 'insights' && ptActive() && typeof renderInsights === 'function') { saveDraft(); store.set('wl:tab', 'insights'); renderInsights(); }
       else { store.set('wl:tab', 'log'); renderLogger(); }
       window.scrollTo({ top: 0 }); break;
     case 'guide': closeModal(); showGuide(t.dataset.reason); break;
+    case 'pt-unlock': tryUnlock(); break;
+    case 'pt-exit': closeModal(); exitPt(); break;
     case 'pick-now':
       closeModal(); state.guideSeen = true;
       if (!tokenValid()) { try { await requestToken(); } catch (err) { return renderSignin(err.message); } }
@@ -1069,6 +1151,7 @@ const DemoSource = (() => {
 
 /* ============================ boot ============================ */
 (async function boot() {
+  await initPt();
   if (DEMO) {
     state.ds = DemoSource;
     document.querySelector('.brand').insertAdjacentHTML('beforeend', ' <span class="chip adhoc">Demo</span>');
@@ -1086,6 +1169,6 @@ const DemoSource = (() => {
   catch (e) { renderSignin(e.message); }
 })();
 </script>
-<script src="insights.js"></script>
+<script src="progress.js"></script>
 </body>
 </html>
