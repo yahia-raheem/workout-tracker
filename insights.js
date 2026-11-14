@@ -338,7 +338,8 @@ function exerciseList() {
 }
 function exerciseTable() {
   const list = exerciseList();
-  if (!INS.exercise || !INS.data.exByKey.has(INS.exercise)) INS.exercise = (list.find(e => e.weighted) || list[0] || INS.data.exercises[0])?.ex;
+  if (!INS.exercise || !INS.data.exByKey.has(INS.exercise))   // default to the first strength lift, not a warm-up move
+    INS.exercise = (list.find(e => e.weighted && !NON_STRENGTH.has(e.cat)) || list.find(e => !NON_STRENGTH.has(e.cat)) || list[0] || INS.data.exercises[0])?.ex;
   return `<section class="panel ins">
     <div class="h-row"><h2>Exercise progress</h2>
       <div class="seg small">${[['plan', 'Current plan'], ['all', 'All']].map(([k, l]) => `<button class="${INS.exScope === k ? 'on' : ''}" data-act="ins-scope" data-scope="${k}">${l}</button>`).join('')}</div></div>
