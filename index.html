@@ -83,14 +83,19 @@
   .ex-row { display: grid; grid-template-columns: 1fr 72px 52px; grid-template-areas: "name spark chg" "name st st"; gap: 2px 10px; align-items: center;
     text-align: left; background: none; border: 0; border-top: 1px solid var(--line); padding: 10px 6px; border-radius: 8px; }
   @media (min-width: 620px) { .ex-row { grid-template-columns: 1fr 72px 56px 130px; grid-template-areas: "name spark chg st"; } }
-  .ex-row.on { background: var(--card2); }
   .ex-name { grid-area: name; font-weight: 600; text-transform: capitalize; min-width: 0; }
   .ex-name small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; text-transform: none; }
   .spark { grid-area: spark; } .ex-chg { grid-area: chg; text-align: right; font-size: 13px; } .ex-st { grid-area: st; justify-self: end; }
   .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #cfd3da; background: var(--card2); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
-  .ex-row.on .badge { background: var(--bg); }
   .b-ic { font-size: 10px; color: var(--muted); }
   .legend-line { margin-top: 10px; line-height: 2; }
+  .pickers { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 10px 0 14px; }
+  @media (min-width: 520px) { .pickers { grid-template-columns: 1fr 2fr; } }
+  .pickers label { font-size: 12px; color: var(--muted); min-width: 0; }
+  .pickers select { display: block; width: 100%; margin-top: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 15px; text-transform: capitalize; }
+  .pickers select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .ex-title { margin: 4px 0 0; font-size: 16px; }
+  .log-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 8px; font-size: 12px; }
 
   .guide { padding-left: 22px; margin: 12px 0; }
   .guide li { margin: 8px 0; }
@@ -769,6 +774,7 @@ function renderLogger() {
     <button class="add-ex" data-act="adhoc">+ Add exercise (not in plan)</button>
     <p class="small muted center" style="margin-top:18px">Tap a “Previous” value to copy it into the set. Only sets with reps or weight are saved.</p>`;
   updateSaveBar();
+  if (typeof prefetchInsights === 'function') prefetchInsights();
 }
 function cardHTML(e, i) {
   const has = e.sets.some(isFilled);
@@ -778,6 +784,7 @@ function cardHTML(e, i) {
         <span class="chip">${esc(e.category || '—')}</span>${e.adhoc ? '<span class="chip adhoc">Added</span>' : ''}
         <h3>${esc(e.exercise)}</h3>
         <div class="meta">${e.sets.length} set${e.sets.length > 1 ? 's' : ''} × ${esc(e.targetReps || '—')} reps${e.rest ? ` · Rest ${esc(fmtRest(e.rest))}` : ''}</div>
+        <div class="hint-slot" data-ex="${esc(e.exercise)}">${typeof logHint === 'function' ? logHint(e.exercise) : ''}</div>
       </div>
       ${e.video ? `<button class="icon-btn video" data-act="video" data-i="${i}" aria-label="Watch exercise video">▶</button>` : ''}
     </div>

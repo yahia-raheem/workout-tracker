@@ -343,25 +343,44 @@ function exerciseTable() {
   return `<section class="panel ins">
     <div class="h-row"><h2>Exercise progress</h2>
       <div class="seg small">${[['plan', 'Current plan'], ['all', 'All']].map(([k, l]) => `<button class="${INS.exScope === k ? 'on' : ''}" data-act="ins-scope" data-scope="${k}">${l}</button>`).join('')}</div></div>
-    <p class="sub">Trend = estimated 1-rep max per session (best set reps for bodyweight or timed moves). Tap a row for details.</p>
-    <div class="ex-list">${list.map(e => `<button class="ex-row ${e.ex === INS.exercise ? 'on' : ''}" data-act="ins-ex" data-ex="${esc(e.ex)}">
+    <p class="sub">Trend = estimated 1-rep max per session (best set reps for bodyweight or timed moves). Pick an exercise under “Exercise trends” to see its charts.</p>
+    <div class="ex-list">${list.map(e => `<div class="ex-row">
         <span class="ex-name">${esc(title(e.name))}<small>${e.hist.length} session${e.hist.length === 1 ? '' : 's'} · ${e.weighted ? `best ${fmtKg(e.bestTop)}` : `best ${fmtNum(e.bestTop, 0)} reps`}</small></span>
         <span class="spark">${sparkline(e.hist.map(e.metric))}</span>
         <span class="ex-chg num">${Number.isFinite(e.change) ? pct(e.change) : '–'}</span>
         <span class="ex-st">${statusBadge(e.status)}</span>
-      </button>`).join('') || '<p class="muted">No logged exercises from this plan yet.</p>'}</div>
+      </div>`).join('') || '<p class="muted">No logged exercises from this plan yet.</p>'}</div>
     <p class="small muted legend-line">${['ready', 'pb', 'stalled', 'steady', 'new'].map(statusBadge).join(' ')}<br>Go heavier = hit every target rep last session · New best = beat every earlier session · Stalled = no improvement in the last 3 sessions.</p>
   </section>`;
 }
 
+// Exercises of one category: current-plan ones first, then most recently trained.
+function exercisesInCategory(cat) {
+  const inPlan = planExerciseKeys();
+  return INS.data.exercises.filter(x => x.cat === cat)
+    .sort((a, b) => (inPlan.has(b.ex) - inPlan.has(a.ex)) || (b.last.date - a.last.date));
+}
+function redrawDetail() {
+  INS.charts = INS.charts.filter(c => !c.id.startsWith('chEx'));
+  drawExerciseDetail();
+  INS.charts.filter(c => c.id.startsWith('chEx')).forEach(c => { const el = document.getElementById(c.id); if (el) c.draw(el); });
+}
 function drawExerciseDetail() {
   const el = document.getElementById('exDetail'); if (!el) return;
   const e = INS.data.exByKey.get(INS.exercise);
   if (!e) { el.hidden = true; return; }
   const h = e.hist;
   const lastTop = e.last.top;
-  el.innerHTML = `<div class="h-row"><h2>${esc(title(e.name))}</h2>${statusBadge(e.status)}</div>
-    <p class="sub">${esc(title(e.cat))} · ${h.length} sessions since ${fmtDate(e.first.date, true)}</p>
+  const D = INS.data, inPlan = planExerciseKeys();
+  const cats = countBy(D.exercises, x => x.cat).sort((a, b) => a[0].localeCompare(b[0])).map(x => x[0]);
+  const inCat = exercisesInCategory(e.cat);
+  el.innerHTML = `<h2>Exercise trends</h2>
+    <div class="pickers">
+      <label>Category<select id="exCat">${cats.map(c => `<option value="${esc(c)}" ${c === e.cat ? 'selected' : ''}>${esc(title(c))}</option>`).join('')}</select></label>
+      <label>Exercise<select id="exPick">${inCat.map(x => `<option value="${esc(x.ex)}" ${x.ex === e.ex ? 'selected' : ''}>${esc(title(x.name))}${inPlan.has(x.ex) ? '' : ' (not in plan)'}</option>`).join('')}</select></label>
+    </div>
+    <div class="h-row"><h3 class="ex-title">${esc(title(e.name))}</h3>${statusBadge(e.status)}</div>
+    <p class="sub">${esc(title(e.cat))} · ${h.length} session${h.length === 1 ? '' : 's'} since ${fmtDate(e.first.date, true)}</p>
     <div class="tiles three">
       ${e.weighted ? tile('Last top set', lastTop ? `${fmtNum(lastTop.w)} × ${fmtNum(lastTop.reps, 0)}` : '–', fmtDate(e.last.date))
                    : tile('Last best set', `${fmtNum(e.last.bestReps, 0)} reps`, fmtDate(e.last.date))}
@@ -614,15 +633,36 @@ document.addEventListener('click', ev => {
     case 'ins-range': INS.range = t.dataset.range; store.set('wl:insRange', INS.range); drawInsights(); break;
     case 'ins-refresh': INS.data = null; renderInsights(); break;
     case 'ins-scope': INS.exScope = t.dataset.scope; drawInsights(); break;
-    case 'ins-ex': {
-      INS.exercise = t.dataset.ex;
-      document.querySelectorAll('.ex-row').forEach(b => b.classList.toggle('on', b.dataset.ex === INS.exercise));
-      INS.charts = INS.charts.filter(c => !c.id.startsWith('chEx'));
-      drawExerciseDetail();
-      INS.charts.filter(c => c.id.startsWith('chEx')).forEach(c => { const el = document.getElementById(c.id); if (el) c.draw(el); });
-      document.getElementById('exDetail')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      break;
-    }
   }
 });
+document.addEventListener('change', ev => {
+  if (ev.target.id === 'exCat') {
+    const list = exercisesInCategory(ev.target.value);
+    INS.exercise = (list.find(x => x.weighted) || list[0])?.ex;
+    redrawDetail();
+  } else if (ev.target.id === 'exPick') { INS.exercise = ev.target.value; redrawDetail(); }
+});
+
+/* ------------------- status hints on the Log workout cards ------------------- */
+const LOG_HINT = {
+  ready: (e) => ['▲', 'good', 'Go heavier', `you hit every target rep last time${e.last.top ? ` (${fmtNum(e.last.top.w)} kg × ${fmtNum(e.last.top.reps, 0)})` : ''}`],
+  pb: () => ['★', 'good', 'New best', 'last session beat every earlier one'],
+  stalled: () => ['■', 'warning', 'Stalled', 'no improvement in the last 3 sessions'],
+};
+function logHint(name) {
+  const e = INS.data && INS.data.exByKey.get(norm(name));
+  if (!e || !LOG_HINT[e.status]) return '';
+  const [ic, cls, label, why] = LOG_HINT[e.status](e);
+  return `<div class="log-hint"><span class="badge"><span class="b-ic ${cls}" aria-hidden="true">${ic}</span>${label}</span><span class="muted">${esc(why)}</span></div>`;
+}
+function fillLogHints() {
+  document.querySelectorAll('.hint-slot').forEach(el => { el.innerHTML = logHint(el.dataset.ex); });
+}
+// Load the history in the background while logging, then show the hints on the cards.
+let hintsLoading = null;
+function prefetchInsights() {
+  if (INS.data) return fillLogHints();
+  if (!hintsLoading) hintsLoading = loadInsightsData().catch(() => null).finally(() => { hintsLoading = null; });
+  hintsLoading.then(() => { if (INS.data) fillLogHints(); });
+}
 INS.range = store.get('wl:insRange', '12w');
