@@ -30,6 +30,68 @@
   main { max-width: 720px; margin: 0 auto; padding: 16px 14px 8px; }
   .site-foot { max-width: 720px; margin: 0 auto; padding: 8px 14px 110px; text-align: center; font-size: 13px; color: var(--muted); }
   .site-foot a { color: var(--muted); }
+  /* ---------- tabs & insights ---------- */
+  .tabs { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; margin: 4px 0 12px; }
+  .tabs button { flex: 1; border: 0; background: none; border-radius: 9px; padding: 9px; font-weight: 700; color: var(--muted); }
+  .tabs button.on { background: var(--card2); color: var(--text); }
+  .ins-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 4px 0; }
+  .seg { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: none; color: var(--muted); padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 14px; }
+  .seg button.on { background: var(--card2); color: var(--text); }
+  .seg.small button { padding: 4px 10px; font-size: 13px; }
+  .panel.ins { padding: 16px; margin: 12px 0; }
+  .panel.ins h2 { font-size: 17px; margin: 0 0 2px; }
+  .h-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .sub { color: var(--muted); font-size: 13px; margin: 2px 0 12px; }
+  .ch-title { font-size: 13px; font-weight: 600; color: var(--muted); margin: 16px 0 6px; }
+  .hl { list-style: none; padding: 0; margin: 10px 0 0; }
+  .hl li { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .hl li:first-child { border-top: 0; }
+  .hl-ic { flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; background: var(--card2); color: var(--muted); font-size: 12px; }
+  .hl-ic.good, .b-ic.good { color: #0ca30c; } .hl-ic.warn, .b-ic.warning { color: #fab219; }
+  .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 12px 0; }
+  @media (min-width: 620px) { .tiles { grid-template-columns: repeat(3, 1fr); } }
+  .tiles.three { grid-template-columns: repeat(3, 1fr); }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; min-width: 0; }
+  .panel .tile { background: var(--card2); }
+  .t-label { font-size: 12px; color: var(--muted); }
+  .t-value { font-size: 22px; font-weight: 700; margin: 2px 0; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tiles.three .t-value { font-size: 18px; }
+  .t-sub { font-size: 12px; color: var(--muted); line-height: 1.35; }
+  .chart { position: relative; width: 100%; }
+  .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chart .ax { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chart .lbl { fill: #cfd3da; font-size: 11px; }
+  .chart .hits rect, .chart .ov { cursor: crosshair; touch-action: pan-y; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: #cfd3da; margin: 0 0 8px; }
+  .legend i, .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  .legend b { color: var(--muted); font-weight: 600; }
+  #vizTip { position: fixed; z-index: 70; display: none; pointer-events: none; background: #0b0d11; border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 10px; font-size: 13px; line-height: 1.5; max-width: 260px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  details.dt { margin-top: 6px; font-size: 13px; }
+  details.dt summary { color: var(--muted); cursor: pointer; }
+  .dt-wrap { overflow-x: auto; }
+  .dt table, .tbl-plan { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .dt th, .dt td, .tbl-plan th, .tbl-plan td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .dt th, .tbl-plan th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .tbl-plan td:nth-child(2) { width: 45%; }
+  .num { font-variant-numeric: tabular-nums; }
+  .inbar { display: inline-block; vertical-align: middle; width: calc(100% - 30px); height: 8px; background: var(--card2); border-radius: 4px; margin-right: 8px; }
+  .inbar span { display: block; height: 100%; background: #3987e5; border-radius: 4px; }
+  .nextup { background: var(--card2); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 14px; }
+  .ex-list { display: grid; gap: 2px; }
+  .ex-row { display: grid; grid-template-columns: 1fr 72px 52px; grid-template-areas: "name spark chg" "name st st"; gap: 2px 10px; align-items: center;
+    text-align: left; background: none; border: 0; border-top: 1px solid var(--line); padding: 10px 6px; border-radius: 8px; }
+  @media (min-width: 620px) { .ex-row { grid-template-columns: 1fr 72px 56px 130px; grid-template-areas: "name spark chg st"; } }
+  .ex-row.on { background: var(--card2); }
+  .ex-name { grid-area: name; font-weight: 600; text-transform: capitalize; min-width: 0; }
+  .ex-name small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; text-transform: none; }
+  .spark { grid-area: spark; } .ex-chg { grid-area: chg; text-align: right; font-size: 13px; } .ex-st { grid-area: st; justify-self: end; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #cfd3da; background: var(--card2); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+  .ex-row.on .badge { background: var(--bg); }
+  .b-ic { font-size: 10px; color: var(--muted); }
+  .legend-line { margin-top: 10px; line-height: 2; }
+
   .guide { padding-left: 22px; margin: 12px 0; }
   .guide li { margin: 8px 0; }
   #pickerHelp { margin-top: 0; }
@@ -347,6 +409,12 @@ const GoogleSource = {
     const j = await gfetch(`${SHEETS}${id}/values:batchGet?${qs}&valueRenderOption=FORMATTED_VALUE`);
     return (j.valueRanges || []).map(v => v.values || []);
   },
+  // Numbers and dates as raw values (dates as serial numbers) for the Insights calculations.
+  async batchGetRaw(id, ranges) {
+    const qs = ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
+    const j = await gfetch(`${SHEETS}${id}/values:batchGet?${qs}&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=SERIAL_NUMBER`);
+    return (j.valueRanges || []).map(v => v.values || []);
+  },
   async addRows(id, sheetId, n) {
     await gfetch(`${SHEETS}${id}:batchUpdate`, { method: 'POST', body: JSON.stringify({ requests: [{ appendDimension: { sheetId, dimension: 'ROWS', length: n } }] }) });
   },
@@ -609,6 +677,7 @@ async function doSave(whenStr) {
     const range = await writeRows(rows);
     rows.forEach(r => addHistory(state.model, { date: r.date, exercise: r.exercise, set: String(r.set), reps: String(r.actualReps), wgt: String(r.actualWgt), notes: r.notes }));
     store.del(draftKey(state.day));
+    if (typeof INS !== 'undefined') INS.data = null;   // insights reload next time
     closeModal();
     state.entries = entriesForDay(state.day); state.restored = false;
     renderLogger();
@@ -683,10 +752,13 @@ function renderValidation() {
       ${DEMO ? '' : `<button class="btn ghost" data-act="change-sheet">Choose another sheet</button>`}
     </div></div>`;
 }
+function tabsHTML(active) {
+  return `<nav class="tabs" role="tablist"><button class="${active === 'log' ? 'on' : ''}" data-act="tab" data-tab="log" role="tab">Log workout</button><button class="${active === 'insights' ? 'on' : ''}" data-act="tab" data-tab="insights" role="tab">Insights</button></nav>`;
+}
 function renderLogger() {
   setChrome({ menu: true, savebar: true });
   const m = state.model;
-  $('#app').innerHTML = `
+  $('#app').innerHTML = `${tabsHTML('log')}
     <div class="session-head">
       <div class="plan-name">${esc(m.planName.trim() || m.title)}</div>
       <div class="days">${m.days.map(d => `<button class="day ${d === state.day ? 'active' : ''} ${store.get(draftKey(d)) ? 'draft' : ''}" data-act="day" data-day="${esc(d)}">${esc(d)}</button>`).join('')}</div>
@@ -829,6 +901,10 @@ document.addEventListener('click', async ev => {
       break;
     case 'change-sheet': closeModal(); renderPick(); window.scrollTo({ top: 0 }); break;
     case 'back-to-log': state.day ? renderLogger() : renderValidation(); break;
+    case 'tab':
+      if (t.dataset.tab === 'insights') { saveDraft(); store.set('wl:tab', 'insights'); renderInsights(); }
+      else { store.set('wl:tab', 'log'); renderLogger(); }
+      window.scrollTo({ top: 0 }); break;
     case 'guide': closeModal(); showGuide(t.dataset.reason); break;
     case 'pick-now':
       closeModal(); state.guideSeen = true;
@@ -919,19 +995,59 @@ const DemoSource = (() => {
     ['core', 'side plank', 'https://youtube.com/shorts/Ye7G1wQCMgk'],
     ['shoulder', 'face pull', 'https://youtube.com/shorts/zi7waeqXpzw'],
     ['cardio', 'incline treadmill', 'https://youtube.com/shorts/HwXYMPGjlUg']];
-  const Hr = (dt, d, c, e, s, tr, ar, tw, aw, n = '') => ['', dt, d, c, e, s, tr, ar, tw, aw, n, 'upper A - lower A - upper B - lower B '];
+  // ~14 weeks of generated history so the Insights view has something to show.
+  const PLAN = 'upper A - lower A - upper B - lower B ';
+  const rnd = (seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; })(7);
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const base = { 'neutral grip incline db press': [14, .015, 2], 'chest supported db row': [14, .012, 2], 'triceps overhead': [7, .01, 1],
+    'bottom up kettlebell carry': [6, .008, 2], 'bulgrian split squat': [8, .02, 2], 'lying leg curl': [18, .012, 1], 'calf raise machine': [120, .01, 5],
+    'flat dumbell floor press': [16, .015, 2], 'lateral raise DB': [5, 0, 1], 'romanian deadlift': [30, .02, 2.5], 'hip thrust machine': [40, .02, 5] };
   const history = [['', '', 'Trainee Workout Historical Data'], [], [],
-    ['', 'Date', 'Day', 'Category', 'Exercise', 'Set', 'Target Reps', 'Actual Reps', 'Target Wgt', 'Actual Wgt', 'Notes', 'Plan Name'],
-    ...[1, 2, 3].map(s => Hr('11/5/2026 18:02:11', 'lower A', 'legs', 'lying leg curl', s, 10, 12, 23, 23)),
-    ...[1, 2, 3].map(s => Hr('11/5/2026 18:02:11', 'lower A', 'legs', 'calf raise machine', s, 15, 12, 160, 160)),
-    ...[1, 2, 3, 4].map(s => Hr('11/12/2026 14:40:03', 'upper A', 'arms', 'triceps overhead', s, 15, s === 4 ? 8 : 12, 9, 9, s === 4 ? 'Failure' : '')),
-    ...[1, 2, 3].map(s => Hr('11/12/2026 14:40:03', 'upper A', 'shoulder', 'bottom up kettlebell carry', s, 20, 20, 8, 8))];
-  const book = { title: 'Demo — Workout Tracker', tabs: { 'Plan': plan, 'Settings': settings, 'Historical Data': history, 'Tracker': [] } };
-  const ids = { 'Plan': 1, 'Settings': 2, 'Historical Data': 3, 'Tracker': 0 };
+    ['', 'Date', 'Day', 'Category', 'Exercise', 'Set', 'Target Reps', 'Actual Reps', 'Target Wgt', 'Actual Wgt', 'Notes', 'Plan Name']];
+  const now = new Date(); const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+  const W = 14;
+  // an older plan, to check that only the current plan counts in "Current plan"
+  for (let k = 0; k < 6; k++) {
+    const d = new Date(mon); d.setDate(d.getDate() - (W + 3) * 7 + k * 4);
+    [1, 2, 3].forEach(s => history.push(['', iso(d), 'Day ' + (k % 4 + 1), 'Legs', 'Leg Press Machine', s, 12, 12, 90 + k * 5, 90 + k * 5, '', 'First Plan']));
+  }
+  const offsets = { 'upper A': 0, 'lower A': 1, 'upper B': 3, 'lower B': 4 };
+  const rows = plan.slice(4);
+  for (let w = W; w >= 0; w--) {
+    for (const [day, off] of Object.entries(offsets)) {
+      const d = new Date(mon); d.setDate(d.getDate() - w * 7 + off);
+      if (d > now || rnd() < (day === 'lower B' ? 0.35 : 0.12)) continue;     // skipped sessions
+      const prog = W - w;
+      rows.filter(r => r[1] === day).forEach(r => {
+        const [, , cat, ex, sets, reps] = r; const b = base[ex];
+        let wt = b ? Math.round(b[0] * (1 + b[1] * prog) / b[2]) * b[2] : 0;
+        if (ex === 'lateral raise DB') wt = prog < 6 ? 4 : 5;
+        for (let s = 1; s <= sets; s++) {
+          let ar = reps - (s > 1 && rnd() < 0.45 ? Math.ceil(rnd() * 3) : 0);
+          if (w === 0 && ['neutral grip incline db press', 'calf raise machine'].includes(ex)) ar = reps;   // ready to go heavier
+          if (ex === 'lateral raise DB' && prog > 8) ar = 12;
+          history.push(['', iso(d), day, cat, ex, s, reps, ar, wt, wt, ar < reps - 2 ? 'Failure' : '', PLAN]);
+        }
+      });
+    }
+  }
+  // Body Data, laid out like the real tab (inputs on top, table from row 10)
+  const body = [[], ['', 'Body Measurements'], ['', 'Biological Sex', 'Male'], ['', 'Height (cm)', 162], ['', 'Measurement System', 'Metric'], [], [], [], [],
+    ['', 'Date', 'Chest', 'Waist', 'Left Leg', 'Right Leg', 'Left Arm', 'Right Arm', 'Neck', 'Weight (kg)', 'Hips (cm)', 'BMI', 'Body Fat %', 'WHtR', 'Fat Mass (kg)', 'Lean Body Mass (kg)', 'WHR']];
+  for (let k = 0; k < 6; k++) {
+    const d = new Date(mon); d.setDate(d.getDate() - (W - k * 2.6) * 7);
+    const waist = 82 - k * 0.6, neck = 38, wt = 69.5 - k * 0.35, hips = 98 - k * 0.3;
+    const bf = (495 / (1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(162)) - 450) / 100;
+    body.push(['', iso(d), 97 + k * 0.4, waist, 56.5 + k * 0.3, 56.5 + k * 0.35, 33 + k * 0.2, 33.2 + k * 0.2, neck, +wt.toFixed(1), hips,
+      +(wt / 1.62 ** 2).toFixed(2), +bf.toFixed(4), +(waist / 162).toFixed(2), +(wt * bf).toFixed(2), +(wt * (1 - bf)).toFixed(2), +(waist / hips).toFixed(2)]);
+  }
+  const book = { title: 'Demo — Workout Tracker', tabs: { 'Plan': plan, 'Settings': settings, 'Historical Data': history, 'Body Data': body, 'Tracker': [] } };
+  const ids = { 'Plan': 1, 'Settings': 2, 'Historical Data': 3, 'Body Data': 4, 'Tracker': 0 };
   const tabOf = range => range.match(/^'((?:[^']|'')+)'!/)[1].replace(/''/g, "'");
   return {
     async meta() { await sleep(250); return { title: book.title, sheets: Object.keys(book.tabs).map(t => ({ title: t, sheetId: ids[t], rowCount: Math.max(1000, book.tabs[t].length) })) }; },
     async batchGet(id, ranges) { await sleep(250); return ranges.map(r => book.tabs[tabOf(r)].map(row => row.map(c => String(c ?? '')))); },
+    async batchGetRaw(id, ranges) { await sleep(250); return ranges.map(r => book.tabs[tabOf(r)].map(row => row.slice())); },
     async addRows() {},
     async update(id, range, values) {
       await sleep(300);
@@ -963,5 +1079,6 @@ const DemoSource = (() => {
   catch (e) { renderSignin(e.message); }
 })();
 </script>
+<script src="insights.js"></script>
 </body>
 </html>

@@ -60,6 +60,19 @@ Run `python3 -m http.server 8000` again, open <http://localhost:8000>, sign in, 
 2. **Settings → Pages → Deploy from a branch → `main` / root**.
 3. Your app will be at `https://<username>.github.io/workout-log/`. Make sure `https://<username>.github.io` is in the OAuth client's JavaScript origins and in the API key's website restrictions (step 4 and 5).
 
+## Insights
+
+The **Insights** tab (next to **Log workout**) builds dashboards from your sheet. Everything is calculated in the browser each time you open it, or when you tap **↻ Refresh**:
+
+- **Highlights**: plain-language takeaways, such as workouts per week vs the 4 weeks before, the next day in your rotation, days you haven't trained in a while, exercises where you hit every target rep (ready to go heavier), your most improved and stalled lifts, how your sets split across muscle groups, and body changes since your first measurement.
+- **Summary tiles and Workouts per week**, for the last 4 weeks, the last 12 weeks or all time.
+- **Current plan**: how many times you've done each day of the plan in the Plan tab, when you last did it, and what share of the planned sets you logged.
+- **Exercise progress**: a trend line for every exercise, using the estimated 1-rep max (Epley: weight × (1 + reps ÷ 30)) or best reps for bodyweight and timed moves, with a status badge. Tap an exercise for its top-set and volume charts.
+- **Sets per muscle group**, per week.
+- **Body**: latest values and changes from the *Body Data* tab (weight, body fat, lean and fat mass, waist, waist-to-height), plus trend charts. The app looks for a header row with at least `Date` and `Weight`.
+
+Every chart has hover/tap tooltips and a **Show data** table.
+
 ## Privacy policy
 
 `privacy.html` is the app's privacy policy, linked from the sign-in screen, the footer and the menu. Use its address (`https://<username>.github.io/workout-tracker/privacy.html`) as the **Privacy policy link** in Google Auth Platform → Branding, and the app's address as the **Application home page**.
