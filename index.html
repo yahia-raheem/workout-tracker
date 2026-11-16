@@ -97,6 +97,12 @@
   #ptPw { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-width: 0; }
   #ptPw:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .err-text { color: var(--err); }
+  .result { text-align: center; padding: 6px 2px 2px; }
+  .sheet .result h3 { margin: 10px 0 6px; font-size: 20px; text-transform: none; }
+  .result p { margin: 6px 0 14px; }
+  .r-icon { width: 64px; height: 64px; border-radius: 50%; margin: 4px auto 0; display: grid; place-items: center; font-size: 34px; font-weight: 800; }
+  .result.ok .r-icon { background: var(--accent); color: var(--accent-ink); }
+  .result.err .r-icon { background: #3a1a1a; color: var(--err); border: 2px solid var(--err); }
   .pickers { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 10px 0 14px; }
   @media (min-width: 520px) { .pickers { grid-template-columns: 1fr 2fr; } }
   .pickers label { font-size: 12px; color: var(--muted); min-width: 0; }
@@ -362,9 +368,9 @@ function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms);
 }
-function openModal(html) { $('#modalBody').innerHTML = html; $('#modal').classList.add('open'); }
+function openModal(html, { locked = false } = {}) { $('#modalBody').innerHTML = html; $('#modal').classList.add('open'); $('#modal').dataset.locked = locked ? '1' : ''; }
 function closeModal() { $('#modal').classList.remove('open'); $('#modalBody').innerHTML = ''; }
-$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal' && !$('#modal').dataset.locked) closeModal(); });
 
 class AuthError extends Error {}
 
@@ -730,7 +736,7 @@ function collectRows(when) {
   return rows;
 }
 
-async function writeRows(objs) {
+async function writeRows(objs, { checkDuplicate = false } = {}) {
   const H = state.model.history, id = state.sheet.id;
   const cols = Object.values(H.map), minCol = Math.min(...cols), maxCol = Math.max(...cols);
   // Re-read the tab right before writing so we append after the true last row.
@@ -738,6 +744,12 @@ async function writeRows(objs) {
   const tab = meta.sheets.find(s => s.sheetId === H.sheetId) || meta.sheets.find(s => s.title === H.title);
   const [fresh] = await state.ds.batchGet(id, [`${q(tab.title)}!A1:${colLetter(maxCol)}`]);
   const lastUsed = Math.max(fresh.length, H.headerRow + 1);          // 1-based
+  if (checkDuplicate && fresh.length - H.headerRow - 1 >= objs.length) {
+    // A retry after an unclear failure: if the last rows already match, the first attempt got through.
+    const tail = fresh.slice(-objs.length), M = H.map, same = (a, b) => String(a ?? '').trim() === String(b ?? '').trim();
+    if (tail.every((r, k) => same(r[M.exercise], objs[k].exercise) && same(r[M.set], objs[k].set) && same(r[M.actualReps], objs[k].actualReps) && same(r[M.actualWgt], objs[k].actualWgt) && same(r[M.day], objs[k].day)))
+      return { range: `${q(tab.title)} (already saved)`, alreadySaved: true };
+  }
   const start = lastUsed + 1, end = start + objs.length - 1;
   if (end > tab.rowCount) await state.ds.addRows(id, tab.sheetId, end - tab.rowCount + 20);
   const values = objs.map(o => {
@@ -747,28 +759,40 @@ async function writeRows(objs) {
   });
   const range = `${q(tab.title)}!${colLetter(minCol)}${start}:${colLetter(maxCol)}${end}`;
   await state.ds.update(id, range, values);
-  return range;
+  return { range };
 }
 
-async function doSave(whenStr) {
+// Every outcome of a save is shown in the modal the user is looking at: saving → saved / not saved.
+async function doSave(whenStr, { retry = false } = {}) {
   const rows = collectRows(whenStr);
-  if (!rows.length) return;
+  if (!rows.length || state.saving) return;
+  state.pendingWhen = whenStr;
   state.saving = true; updateSaveBar();
+  const exCount = new Set(rows.map(r => r.exercise)).size;
+  openModal(`<div class="center" style="padding:18px 0"><div class="spinner"></div><b>Saving ${rows.length} set${rows.length > 1 ? 's' : ''}…</b><p class="muted small">Keep this page open.</p></div>`, { locked: true });
   try {
-    const range = await writeRows(rows);
+    const res = await writeRows(rows, { checkDuplicate: retry });
     rows.forEach(r => addHistory(state.model, { date: r.date, exercise: r.exercise, set: String(r.set), reps: String(r.actualReps), wgt: String(r.actualWgt), notes: r.notes }));
     store.del(draftKey(state.day));
-    if (typeof INS !== 'undefined') INS.data = null;   // insights reload next time
-    closeModal();
+    if (typeof INS !== 'undefined') INS.data = null;   // insights and hints reload
+    state.lastWrite = { range: res.range, rows };
     state.entries = entriesForDay(state.day); state.restored = false;
     renderLogger();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    toast(`Saved ${rows.length} set${rows.length > 1 ? 's' : ''} to Historical Data`);
-    if (DEMO) showDemoWrite(range, rows);
+    window.scrollTo({ top: 0 });
+    try { navigator.vibrate?.(60); } catch {}
+    const d = new Date(`${whenStr}T12:00:00`);
+    openModal(`<div class="result ok"><div class="r-icon" aria-hidden="true">✓</div><h3>Workout saved</h3>
+      <p><b>${rows.length} set${rows.length > 1 ? 's' : ''}</b> from <b>${exCount} exercise${exCount > 1 ? 's' : ''}</b> ${res.alreadySaved ? 'were already' : 'were'} added to Historical Data for <b>${esc(state.day)}</b>, ${esc(isNaN(d) ? whenStr : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}.</p>
+      <button class="btn block" data-act="close">Done</button>
+      ${DEMO ? `<button class="btn ghost block" data-act="demo-rows" style="margin-top:10px">See the rows written (demo)</button>` : ''}</div>`, { locked: true });
   } catch (e) {
-    closeModal();
-    if (e instanceof AuthError) { state.authLost = true; renderLogger(); }
-    else { toast('Save failed: ' + e.message, 5000); }
+    const auth = e instanceof AuthError;
+    try { navigator.vibrate?.([80, 60, 80]); } catch {}
+    openModal(`<div class="result err"><div class="r-icon" aria-hidden="true">!</div><h3>Not saved yet</h3>
+      <p>${auth ? 'Your Google sign-in expired (it lasts about an hour), so the workout couldn\'t be saved.' : `Something went wrong while saving: <span class="muted">${esc(e.message)}</span>`}</p>
+      <p class="muted small">Your entries are safe on this device. Nothing is lost.</p>
+      <button class="btn block" data-act="${auth ? 'reauth-save' : 'retry-save'}">${auth ? 'Sign in &amp; save' : 'Try again'}</button>
+      <button class="btn ghost block" data-act="close" style="margin-top:10px">Not now</button></div>`, { locked: true });
   } finally { state.saving = false; updateSaveBar(); }
 }
 
@@ -902,7 +926,7 @@ function updateSaveBar() {
   const sets = state.entries.reduce((n, e) => n + e.sets.filter(isFilled).length, 0);
   const exs = state.entries.filter(e => e.sets.some(isFilled)).length;
   $('#saveCount').innerHTML = sets ? `<b>${sets}</b> set${sets > 1 ? 's' : ''} · <b>${exs}</b> exercise${exs > 1 ? 's' : ''}` : 'Nothing logged yet';
-  $('#saveBtn').disabled = !sets || state.saving || state.authLost;
+  $('#saveBtn').disabled = !sets || state.saving;
   $('#saveBtn').textContent = state.saving ? 'Saving…' : 'Save workout';
 }
 
@@ -948,10 +972,12 @@ function addAdhoc() {
 }
 function showConfirm() {
   const items = state.entries.filter(e => e.sets.some(isFilled));
+  const expired = !DEMO && !tokenValid();
   openModal(`<h3>Save ${esc(state.day)}?</h3>
+    ${expired ? `<div class="banner err" style="margin-top:0">Your Google sign-in has expired. Tap “Sign in &amp; save” to sign in again; your entries are kept.</div>` : ''}
     <ul class="summary">${items.map(e => `<li><span>${esc(e.exercise)}${e.adhoc ? ' <span class="chip adhoc">Added</span>' : ''}</span><span class="muted">${e.sets.filter(isFilled).length} set(s)</span></li>`).join('')}</ul>
     <div class="field"><label>Session date</label><input id="when" type="date" value="${toLocalInput(new Date())}"></div>
-    <div class="row"><button class="btn" data-act="confirm-save">Save to Historical Data</button><button class="btn ghost" data-act="close">Back</button></div>`);
+    <div class="row"><button class="btn" data-act="confirm-save">${expired ? 'Sign in &amp; save' : 'Save to Historical Data'}</button><button class="btn ghost" data-act="close">Back</button></div>`);
 }
 function showDemoWrite(range, rows) {
   const H = SCHEMA.history.names;
@@ -1040,8 +1066,19 @@ document.addEventListener('click', async ev => {
     case 'adhoc-add': addAdhoc(); break;
     case 'confirm-save': {
       const v = $('#when').value;   // already YYYY-MM-DD
-      doSave(/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : toSheetDate(new Date())); break;
+      const when = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : toSheetDate(new Date());
+      if (!DEMO && !tokenValid()) {                 // sign in first; must start inside this tap
+        try { await requestToken(); } catch (err) { toast(err.message, 4000); break; }
+      }
+      doSave(when); break;
     }
+    case 'reauth-save':
+      if (!DEMO) { try { await requestToken(); } catch (err) { toast(err.message, 4000); break; } }
+      doSave(state.pendingWhen, { retry: false }); break;
+    case 'retry-save':
+      if (!DEMO && !tokenValid()) { try { await requestToken(); } catch (err) { toast(err.message, 4000); break; } }
+      doSave(state.pendingWhen, { retry: true }); break;
+    case 'demo-rows': if (state.lastWrite) showDemoWrite(state.lastWrite.range, state.lastWrite.rows); break;
   }
 });
 document.addEventListener('input', ev => {
