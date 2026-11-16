@@ -337,9 +337,24 @@ function drawBody() {
 /* ----------------------------- charts (SVG) ----------------------------- */
 function addChart(id, draw) { INS.charts.push({ id, draw }); }
 function drawAll() {
-  for (const c of INS.charts) { const el = document.getElementById(c.id); if (el) { el.innerHTML = ''; c.draw(el); } }
+  for (const c of INS.charts) {
+    const el = document.getElementById(c.id); if (!el) continue;
+    const open = el.querySelector('details.dt')?.open;          // keep "Show data" open across redraws
+    el.innerHTML = ''; c.draw(el);
+    if (open) { const d = el.querySelector('details.dt'); if (d) d.open = true; }
+  }
 }
-let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (document.querySelector('.ins')) drawAll(); }, 150); });
+// Redraw only when the width really changes (e.g. rotating the phone). Phones also fire "resize"
+// when the address bar slides in or out while scrolling; redrawing then made the page jump.
+let resizeT, lastW = window.innerWidth;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => {
+    if (window.innerWidth === lastW) return;
+    lastW = window.innerWidth;
+    if (document.querySelector('.ins')) drawAll();
+  }, 150);
+});
 
 function niceScale(min, max, ticks = 4, zero = false) {
   if (zero) min = Math.min(0, min);
