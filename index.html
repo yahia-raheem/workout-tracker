@@ -97,6 +97,8 @@
   #ptPw { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-width: 0; }
   #ptPw:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .err-text { color: var(--err); }
+  .day-note { font-size: 13px; color: var(--muted); margin: -2px 0 4px; }
+  .day-note b { color: var(--text); font-weight: 600; }
   .result { text-align: center; padding: 6px 2px 2px; }
   .sheet .result h3 { margin: 10px 0 6px; font-size: 20px; text-transform: none; }
   .result p { margin: 6px 0 14px; }
@@ -590,7 +592,8 @@ function parseWorkbook(meta, raw, tabs) {
       m.history = { title: tabs.history.title, sheetId: tabs.history.sheetId, rowCount: tabs.history.rowCount, headerRow: h.row, map: h.map };
       raw.history.slice(h.row + 1).forEach(r => {
         const ex = String(r[h.map.exercise] ?? '').trim(); if (!ex) return;
-        addHistory(m, { date: r[h.map.date] ?? '', exercise: ex, set: String(r[h.map.set] ?? '').trim(), reps: String(r[h.map.actualReps] ?? '').trim(), wgt: String(r[h.map.actualWgt] ?? '').trim(), notes: String(r[h.map.notes] ?? '').trim() });
+        addHistory(m, { date: r[h.map.date] ?? '', exercise: ex, set: String(r[h.map.set] ?? '').trim(), reps: String(r[h.map.actualReps] ?? '').trim(), wgt: String(r[h.map.actualWgt] ?? '').trim(), notes: String(r[h.map.notes] ?? '').trim(),
+          day: String(r[h.map.day] ?? '').trim(), plan: String(r[h.map.plan] ?? '').trim() });
       });
       const last = m.historyRows.length ? m.historyRows[m.historyRows.length - 1].date : null;
       add('ok', `Historical Data: ${m.historyRows.length} logged sets${last ? `, last entry ${last}` : ''}. New sets will be added below them.`);
@@ -698,6 +701,30 @@ async function loadSheet(id, name) {
   }
 }
 
+// Which day to open: an unsaved workout first, otherwise the day after the last one saved,
+// following the order of days in the Plan tab (wrapping round after the last day).
+function suggestDay() {
+  const m = state.model, pn = norm(m.planName);
+  const drafts = m.days.map(d => ({ day: d, at: store.get(draftKey(d))?.at || 0 })).filter(x => x.at).sort((a, b) => b.at - a.at);
+  if (drafts.length) return { day: drafts[0].day, why: 'draft' };
+  const idxOf = d => m.days.findIndex(x => norm(x) === norm(d));
+  for (let i = m.historyRows.length - 1; i >= 0; i--) {
+    const r = m.historyRows[i];
+    if (idxOf(r.day) < 0 || (pn && r.plan && norm(r.plan) !== pn)) continue;
+    return { day: m.days[(idxOf(r.day) + 1) % m.days.length], why: 'next', after: m.days[idxOf(r.day)], date: r.date };
+  }
+  return { day: m.days[0], why: 'first' };
+}
+function dayNoteHTML() {
+  const s = state.suggestion;
+  if (!s || s.day !== state.day) return '';
+  let when = '';
+  if (s.date && typeof toDay === 'function') { const d = toDay(s.date); if (d) when = ` on ${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}`; }
+  const text = s.why === 'draft' ? 'You have an unsaved workout for this day.'
+    : s.why === 'next' ? `Next in your plan: your last workout was <b>${esc(s.after)}</b>${esc(when)}.`
+    : 'First day of your plan.';
+  return `<div class="day-note">${text}</div>`;
+}
 function startLogging(day) {
   state.day = day;
   store.set(`wl:lastDay:${state.sheet.id}`, day);
@@ -772,11 +799,11 @@ async function doSave(whenStr, { retry = false } = {}) {
   openModal(`<div class="center" style="padding:18px 0"><div class="spinner"></div><b>Saving ${rows.length} set${rows.length > 1 ? 's' : ''}…</b><p class="muted small">Keep this page open.</p></div>`, { locked: true });
   try {
     const res = await writeRows(rows, { checkDuplicate: retry });
-    rows.forEach(r => addHistory(state.model, { date: r.date, exercise: r.exercise, set: String(r.set), reps: String(r.actualReps), wgt: String(r.actualWgt), notes: r.notes }));
+    rows.forEach(r => addHistory(state.model, { date: r.date, exercise: r.exercise, set: String(r.set), reps: String(r.actualReps), wgt: String(r.actualWgt), notes: r.notes, day: r.day, plan: r.plan }));
     store.del(draftKey(state.day));
     if (typeof INS !== 'undefined') INS.data = null;   // insights and hints reload
     state.lastWrite = { range: res.range, rows };
-    state.entries = entriesForDay(state.day); state.restored = false;
+    state.entries = entriesForDay(state.day); state.restored = false; state.suggestion = null;
     renderLogger();
     window.scrollTo({ top: 0 });
     try { navigator.vibrate?.(60); } catch {}
@@ -870,6 +897,7 @@ function renderLogger() {
     <div class="session-head">
       <div class="plan-name">${esc(m.planName.trim() || m.title)}</div>
       <div class="days">${m.days.map(d => `<button class="day ${d === state.day ? 'active' : ''} ${store.get(draftKey(d)) ? 'draft' : ''}" data-act="day" data-day="${esc(d)}">${esc(d)}</button>`).join('')}</div>
+      ${dayNoteHTML()}
     </div>
     ${state.authLost ? `<div class="banner err"><span>Your Google session expired. Your entries are kept.</span><button class="btn" data-act="reauth">Sign in</button></div>` : ''}
     ${state.restored ? `<div class="banner"><span>Restored your unsaved entries for ${esc(state.day)}.</span><button class="text-btn" data-act="discard">Discard</button></div>` : ''}
@@ -1044,10 +1072,7 @@ document.addEventListener('click', async ev => {
       state.token = null; state.model = null; state.sheet = null; $('#sheetName').textContent = '';
       renderSignin(); break;
     case 'show-checks': closeModal(); renderValidation(); break;
-    case 'continue': {
-      const last = store.get(`wl:lastDay:${state.sheet.id}`);
-      startLogging(state.model.days.includes(last) ? last : state.model.days[0]); break;
-    }
+    case 'continue': state.suggestion = suggestDay(); startLogging(state.suggestion.day); break;
     case 'day': if (t.dataset.day !== state.day) { saveDraft(); startLogging(t.dataset.day); window.scrollTo({ top: 0 }); } break;
     case 'discard':
       if (confirm(`Discard the unsaved entries for ${state.day}?`)) { store.del(draftKey(state.day)); state.entries = entriesForDay(state.day); state.restored = false; renderLogger(); }
