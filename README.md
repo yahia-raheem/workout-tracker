@@ -101,6 +101,7 @@ The **Plan** tab writes the training plan into the open sheet's Plan tab, so the
   - add, change, reorder (↑ ↓) and remove exercises;
   - set **Sets**, **Reps**, **Rest (sec)** and a **Comment** for each exercise.
 - **Create a new plan**: give it a new name, and start from a copy of the current plan or an empty one. *Keep a copy of the current plan* (on by default) first copies the old plan into a **Plan Archive** tab, which is created the first time. Each row records the plan name and the date it was archived.
+- **Bring back an archived plan**: in *Create a new plan*, choose *A plan from the archive* and pick one; it lists the newest first. It opens in the editor with its days, exercises and settings. Its old name is filled in: keep it to continue that plan's history in Insights, or change it to start a separate history. The plan it replaces is archived as usual.
 - Exercises are picked from the **Settings** tab, so names match the history. Their video links come along automatically.
 - Before anything is written, **Save plan** shows a review: every change, problems that block saving (no plan name, a day without exercises, sets not 1–20), and warnings such as missing reps.
 - Rest is saved in seconds. Older plans used small numbers for minutes (1 = 1 minute); the editor shows those as seconds (60) and saves them that way.

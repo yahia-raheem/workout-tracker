@@ -9,7 +9,7 @@
    ===================================================================== */
 
 // The plan being edited. mode: null (not editing) | 'edit' | 'create'
-const PL = { mode: null, name: '', days: [], dayIdx: 0, archive: true, orig: null, converted: 0, saving: false };
+const PL = { mode: null, name: '', days: [], dayIdx: 0, archive: true, orig: null, converted: 0, saving: false, source: null, archived: [] };
 let plSeq = 0;
 const pid = () => `p${Date.now().toString(36)}${(plSeq++).toString(36)}`;
 const planDraftKey = () => `wl:planDraft:${state.sheet?.id}`;
@@ -39,19 +39,24 @@ function saveDraftPlan() {
   clearTimeout(saveDraftPlan.t);
   saveDraftPlan.t = setTimeout(() => {
     if (!PL.mode) return store.del(planDraftKey());
-    store.set(planDraftKey(), { mode: PL.mode, name: PL.name, days: PL.days, dayIdx: PL.dayIdx, archive: PL.archive, orig: PL.orig, converted: PL.converted, at: Date.now() });
+    store.set(planDraftKey(), { mode: PL.mode, name: PL.name, days: PL.days, dayIdx: PL.dayIdx, archive: PL.archive, orig: PL.orig, converted: PL.converted, source: PL.source, at: Date.now() });
   }, 300);
 }
-function startEditing(mode, { from = 'copy', name = '', archive = true } = {}) {
+function startEditing(mode, { from = 'copy', name = '', archive = true, archived = null } = {}) {
   const cur = planFromModel();
-  PL.mode = mode; PL.archive = archive; PL.dayIdx = 0; PL.converted = cur.converted;
+  PL.mode = mode; PL.archive = archive; PL.dayIdx = 0; PL.converted = cur.converted; PL.source = null;
   PL.orig = clone({ name: cur.name, days: cur.days });            // same ids, so changes can be listed
   if (mode === 'edit') { PL.name = cur.name; PL.days = cur.days; }
+  else if (from === 'archive' && archived) {
+    const a = planFromArchive(archived);
+    PL.name = name; PL.days = a.days; PL.converted = a.converted;
+    PL.source = { name: archived.name, when: archived.when };
+  }
   else { PL.name = name; PL.days = from === 'copy' ? clone(cur.days) : [{ id: pid(), name: 'Day 1', items: [] }]; }
   saveDraftPlan(); renderPlanEditor(); window.scrollTo({ top: 0 });
 }
 function stopEditing() {
-  Object.assign(PL, { mode: null, name: '', days: [], dayIdx: 0, orig: null, converted: 0 });
+  Object.assign(PL, { mode: null, name: '', days: [], dayIdx: 0, orig: null, converted: 0, source: null });
   store.del(planDraftKey());
 }
 
@@ -111,6 +116,7 @@ function planProblems() {
       if (String(x.reps).trim() === '') warns.push(`${where}: no target reps.`);
       else if (!Number.isFinite(Number(x.reps))) warns.push(`${where}: target reps “${x.reps}” isn't a number.`);
       if (String(x.rest).trim() !== '' && !Number.isFinite(Number(x.rest))) errors.push(`${where}: rest must be a number of seconds.`);
+      if (!state.model.libByName.has(norm(x.ex))) warns.push(`${where}: not in the Settings tab any more (it will still be saved).`);
     });
   });
   return { errors, warns };
@@ -150,11 +156,14 @@ function renderPlanCreate() {
       <button class="text-btn" data-act="pl-home" style="padding-left:0">← Plan</button>
       <h2>Create a new plan</h2>
       <div class="field"><label for="plNewName">Plan name</label><input id="plNewName" autocomplete="off" placeholder="e.g. Strength block · Dec"></div>
-      <p class="small muted" style="margin-top:-4px">Must be different from “${esc(state.model.planName.trim())}”, so past workouts stay under that name.</p>
+      <p class="small muted" id="plNameNote" style="margin-top:-4px">${defaultNameNote()}</p>
       <fieldset class="pl-choices">
         <legend>Start from</legend>
         <label><input type="radio" name="plFrom" value="copy" checked><span><b>A copy of the current plan</b><br><span class="muted small">Same days and exercises, ready to change.</span></span></label>
         <label><input type="radio" name="plFrom" value="empty"><span><b>An empty plan</b><br><span class="muted small">Start with one day and add everything yourself.</span></span></label>
+        <label id="plFromArcRow"><input type="radio" name="plFrom" value="archive" id="plFromArc" disabled><span style="flex:1;min-width:0"><b>A plan from the archive</b><br>
+          <span class="muted small" id="plArcMsg">Looking for archived plans…</span>
+          <select id="plArcPick" hidden style="display:block;width:100%;margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--text);font-size:15px"></select></span></label>
       </fieldset>
       <label class="pl-check"><input type="checkbox" id="plArchive" checked><span><b>Keep a copy of the current plan</b><br><span class="muted small">Saved to a “Plan Archive” tab in the sheet (created if needed) before it's replaced.</span></span></label>
       <div class="small err-text" id="plNewErr" style="min-height:18px;margin:8px 0"></div>
@@ -162,6 +171,64 @@ function renderPlanCreate() {
       <p class="small muted center">Nothing changes in the sheet until you tap Save plan.</p>
     </section>`;
   $('#plNewName').focus();
+  loadArchivedPlans().then(fillArchiveChoice);
+}
+const defaultNameNote = () => `Must be different from “${esc(state.model.planName.trim())}”, so past workouts stay under that name.`;
+
+/* ----------------------------- archived plans ----------------------------- */
+// The Plan Archive tab holds one block of rows per archived plan: same Plan Name + Archived on.
+async function loadArchivedPlans() {
+  try {
+    const meta = await state.ds.meta(state.sheet.id);
+    const tab = meta.sheets.find(s => norm(s.title) === 'plan archive');
+    if (!tab) return [];
+    const [rows] = await state.ds.batchGet(state.sheet.id, [`${q(tab.title)}!A1:Z`]);
+    const head = (rows[0] || []).map(norm);
+    const col = re => head.findIndex(h => re.test(h));
+    const C = { when: col(/^archived/), plan: col(/^plan( name)?$/), day: col(/^day$/), cat: col(/^category$/), ex: col(/^exercise$/),
+      sets: col(/sets?$/), reps: col(/^target reps?$/), rest: col(/^rest/), notes: col(/^notes?$/), video: col(/video/) };
+    if (C.plan < 0 || C.day < 0 || C.ex < 0) return [];
+    const get = (r, k) => C[k] >= 0 ? String(r[C[k]] ?? '').trim() : '';
+    const groups = []; let lastKey = null;
+    rows.slice(1).forEach(r => {
+      if (!get(r, 'ex')) return;
+      const key = `${get(r, 'plan')}|${get(r, 'when')}`;
+      if (key !== lastKey) { groups.push({ name: get(r, 'plan'), when: get(r, 'when'), rows: [] }); lastKey = key; }
+      groups[groups.length - 1].rows.push({ day: get(r, 'day'), cat: get(r, 'cat'), ex: get(r, 'ex'), sets: get(r, 'sets'), reps: get(r, 'reps'), rest: get(r, 'rest'), notes: get(r, 'notes'), video: get(r, 'video') });
+    });
+    PL.archived = groups.reverse();                                  // newest first
+    return PL.archived;
+  } catch { PL.archived = []; return []; }
+}
+const fmtArchived = w => { const d = typeof toDay === 'function' ? toDay(w) : null; return d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : w; };
+function fillArchiveChoice(list) {
+  const radio = $('#plFromArc'), msg = $('#plArcMsg'), pick = $('#plArcPick');
+  if (!radio) return;                                                // left the screen meanwhile
+  if (!list.length) { msg.textContent = 'No archived plans in this sheet yet.'; $('#plFromArcRow').style.opacity = '.55'; return; }
+  radio.disabled = false;
+  msg.textContent = `${list.length} archived plan${list.length === 1 ? '' : 's'}. Opens with its days, exercises and settings.`;
+  pick.innerHTML = list.map((a, i) => {
+    const days = [...new Set(a.rows.map(r => r.day))].length;
+    return `<option value="${i}">${esc(a.name || 'Unnamed plan')} · archived ${esc(fmtArchived(a.when))} · ${days} day${days === 1 ? '' : 's'}</option>`;
+  }).join('');
+}
+function useArchivedName() {
+  const a = PL.archived?.[Number($('#plArcPick').value)]; if (!a) return;
+  $('#plNewName').value = a.name;
+  $('#plNameNote').innerHTML = `This is the archived plan's name. Keep it to carry on that plan's history in Insights, or change it to start a separate history.`;
+  $('#plNewErr').textContent = '';
+}
+function planFromArchive(a) {
+  let converted = 0; const days = [];
+  a.rows.forEach(r => {
+    let d = days.find(x => x.name === r.day);
+    if (!d) { d = { id: pid(), name: r.day, items: [] }; days.push(d); }
+    const rest = restToSec(r.rest);
+    if (r.rest !== '' && String(rest) !== r.rest) converted++;
+    const lib = state.model.libByName.get(norm(r.ex));
+    d.items.push({ id: pid(), ex: r.ex, cat: r.cat || lib?.category || '', sets: r.sets, reps: r.reps, rest, notes: r.notes, video: r.video || lib?.video || '' });
+  });
+  return { days, converted };
 }
 
 function renderPlanEditor() {
@@ -266,6 +333,7 @@ function showPlanReview() {
     <p class="small muted" style="margin-top:-6px">This replaces the Plan tab in “${esc(state.sheet.name)}”. Past workouts in Historical Data are not changed.</p>
     ${PL.mode === 'create'
       ? `<p>New plan with <b>${PL.days.length} day${PL.days.length === 1 ? '' : 's'}</b> and <b>${n} exercise${n === 1 ? '' : 's'}</b>: ${PL.days.map(d => esc(d.name)).join(', ')}.</p>
+         ${PL.source ? `<p class="small muted">Loaded from the archive: “${esc(PL.source.name)}” (archived ${esc(fmtArchived(PL.source.when))}).</p>` : ''}
          <p class="small muted">${PL.archive ? `The current plan “${esc(state.model.planName.trim())}” will be copied to the “Plan Archive” tab first.` : 'The current plan will not be kept anywhere else.'}</p>`
       : `<div class="eyebrow">Changes</div>
          <ul class="summary">${ch.map(c => `<li style="justify-content:flex-start;gap:10px"><b class="${sym[c.t][1]}" style="width:14px">${sym[c.t][0]}</b><span>${c.day ? `<b>${esc(c.day)}</b> · ` : ''}${esc(c.text)}</span></li>`).join('') || '<li><span class="muted">No changes.</span></li>'}</ul>`}
@@ -319,7 +387,8 @@ async function archiveCurrentPlan(meta) {
     await state.ds.update(id, `${q(TITLE)}!A1:J1`, [head], 'RAW');
   }
   const [cur] = await state.ds.batchGet(id, [`${q(tab.title)}!A1:J`]);
-  const d = new Date(), when = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const d = new Date(), p2 = n => String(n).padStart(2, '0');
+  const when = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;   // time keeps copies apart
   const rows = m.plan.map(p => [when, m.planName.trim(), p.day, p.category, p.exercise, numOr(p.sets), numOr(p.reps), numOr(p.rest), p.notes || '', p.video || '']);
   if (!rows.length) return;
   const start = Math.max(cur.length, 1) + 1, end = start + rows.length - 1;
@@ -366,9 +435,12 @@ document.addEventListener('click', async ev => {
     case 'pl-new': renderPlanCreate(); break;
     case 'pl-create-go': {
       const name = $('#plNewName').value.trim();
+      const from = document.querySelector('input[name=plFrom]:checked').value;
       if (!name) { $('#plNewErr').textContent = 'Give the plan a name.'; $('#plNewName').focus(); break; }
       if (norm(name) === norm(state.model.planName)) { $('#plNewErr').textContent = 'That is the current plan\'s name. Pick a new one.'; break; }
-      startEditing('create', { name, from: document.querySelector('input[name=plFrom]:checked').value, archive: $('#plArchive').checked });
+      const archived = from === 'archive' ? PL.archived?.[Number($('#plArcPick').value)] : null;
+      if (from === 'archive' && !archived) { $('#plNewErr').textContent = 'Pick an archived plan.'; break; }
+      startEditing('create', { name, from, archive: $('#plArchive').checked, archived });
       break;
     }
     case 'pl-cancel':
@@ -418,6 +490,14 @@ document.addEventListener('click', async ev => {
       if (!DEMO && !tokenValid()) { try { await requestToken(); } catch (err) { toast(err.message, 4000); break; } }
       savePlan(); break;
   }
+});
+// Create screen: picking "from the archive" (or another archived plan) fills in its name.
+document.addEventListener('change', ev => {
+  if (ev.target.name === 'plFrom') {
+    $('#plArcPick').hidden = ev.target.value !== 'archive';
+    if (ev.target.value === 'archive') useArchivedName();
+    else { $('#plNameNote').innerHTML = defaultNameNote(); }
+  } else if (ev.target.id === 'plArcPick') useArchivedName();
 });
 document.addEventListener('input', ev => {
   const f = ev.target.dataset && ev.target.dataset.pf; if (!f || !PL.mode) return;
