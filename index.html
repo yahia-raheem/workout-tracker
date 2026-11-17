@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0f1115">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Workout Log">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>Workout Log</title>
 <style>
   :root {
@@ -13,6 +20,7 @@
     --radius: 14px;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Arabic", sans-serif; }
   button, input, select { font: inherit; color: inherit; }
@@ -197,6 +205,22 @@
   .set-row { display: grid; grid-template-columns: 30px 1fr 76px 76px 34px; gap: 8px; align-items: center; padding: 4px 0; }
   .set-row.head { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); padding-bottom: 2px; }
   .set-no { font-weight: 700; color: var(--muted); text-align: center; }
+  .set-done { width: 30px; height: 30px; border-radius: 50%; padding: 0; justify-self: center; font-weight: 800; font-size: 14px;
+    background: none; color: var(--muted); border: 1.5px solid #3a404c; font-variant-numeric: tabular-nums; }
+  .set-done.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-size: 16px; }
+  .rest-bar { max-width: 720px; margin: 0 auto 10px; background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; position: relative; overflow: hidden; }
+  .rest-bar.over { border-color: var(--accent); animation: restflash 1s ease-in-out 3; }
+  @keyframes restflash { 50% { background: #2c3410; } }
+  .rest-prog { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); transition: width .25s linear; }
+  .rest-row { display: flex; align-items: center; gap: 10px; }
+  .rest-time { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--accent); min-width: 58px; }
+  .rest-txt { flex: 1; min-width: 0; font-size: 13px; line-height: 1.3; }
+  .rest-txt span { color: var(--muted); }
+  .rest-btn { background: none; border: 1px solid var(--line); border-radius: 10px; color: var(--text); padding: 8px 10px; font-weight: 600; flex: none; }
+  .rest-notif { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  .rest-notif span { flex: 1; }
+  .banner.install { background: var(--card2); border-color: var(--line); color: var(--text); }
+  .banner.install .small { color: var(--muted); }
   .set-row.done .set-no { color: var(--accent); }
   .prev { text-align: left; background: none; border: 1px dashed var(--line); border-radius: 10px; padding: 8px; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .prev:disabled { border-color: transparent; cursor: default; }
@@ -257,6 +281,7 @@
 <main id="app"></main>
 <footer class="site-foot"><a href="privacy.html">Privacy Policy</a> · <a href="https://github.com/yahia-raheem/workout-tracker">Source on GitHub</a></footer>
 <div class="savebar" id="savebar" hidden>
+  <div class="rest-bar" id="restBar" hidden></div>
   <div class="inner">
     <div class="count" id="saveCount"></div>
     <button class="btn" id="saveBtn">Save workout</button>
@@ -950,6 +975,8 @@ function renderLogger() {
     <p class="small muted center" style="margin-top:18px">Tap a “Previous” value to copy it into the set. Only sets with reps or weight are saved.</p>`;
   updateSaveBar();
   if (typeof prefetchInsights === 'function') prefetchInsights();
+  if (typeof restResume === 'function') restResume();
+  if (typeof installBanner === 'function') installBanner();
 }
 function cardHTML(e, i) {
   const has = e.sets.some(isFilled);
@@ -980,7 +1007,7 @@ function setHTML(e, i, s, j) {
   const prevTxt = p ? `${p.reps || '–'} @ ${p.wgt || 0}${p.notes ? ' · ' + p.notes : ''}` : '—';
   const a = `data-i="${i}" data-j="${j}"`;
   return `<div class="set-row ${isFilled(s) ? 'done' : ''}" ${a}>
-      <span class="set-no">${j + 1}</span>
+      <button class="set-done ${s.done ? 'on' : ''}" data-act="done" ${a} aria-pressed="${s.done ? 'true' : 'false'}" aria-label="Set ${j + 1} ${s.done ? 'done, tap to undo' : 'not done, tap when finished'}">${s.done ? '✓' : j + 1}</button>
       <button class="prev" data-act="fill" ${a} ${p ? '' : 'disabled'} title="${p ? 'Copy into this set' : 'No previous data'}">${esc(prevTxt)}</button>
       <input inputmode="numeric" data-f="reps" ${a} value="${esc(s.reps)}" placeholder="${esc(e.targetReps)}" aria-label="Set ${j + 1} reps">
       <input inputmode="decimal" data-f="wgt" ${a} value="${esc(s.wgt)}" placeholder="${esc(p?.wgt ?? '')}" aria-label="Set ${j + 1} weight">
@@ -1066,6 +1093,7 @@ function showMenu() {
       `<button class="btn ghost block" data-act="change-sheet" style="margin-bottom:10px">Choose another sheet</button>
        <button class="btn ghost block" data-act="signout" style="margin-bottom:10px">Sign out</button>
        ${ptActive() ? `<button class="btn ghost block" data-act="pt-exit" style="margin-bottom:10px">Exit PT mode</button>` : ''}`}
+    ${typeof canInstall === 'function' && canInstall() ? `<button class="btn ghost block" data-act="install" style="margin-bottom:10px">Install as an app</button>` : ''}
     <a class="btn ghost block" href="privacy.html" style="display:block;text-align:center;text-decoration:none;margin-bottom:10px">Privacy Policy</a>
     <button class="btn block" data-act="close">Close</button>`);
 }
@@ -1130,8 +1158,23 @@ document.addEventListener('click', async ev => {
     }
     case 'note': e.sets[j].showNote = !e.sets[j].showNote || !!e.sets[j].note; rerenderCard(i);
       document.querySelector(`.set-note input[data-i="${i}"][data-j="${j}"]`)?.focus(); break;
+    case 'done': {
+      const st = e.sets[j];
+      if (!st.done) {
+        // Ticking an empty set fills in the plan's reps and last time's weight.
+        const p = prevFor(e.exercise, j + 1);
+        if (String(st.reps).trim() === '' && /^\d+(\.\d+)?$/.test(String(e.targetReps).trim())) st.reps = String(e.targetReps).trim();
+        if (String(st.wgt).trim() === '' && p && String(p.wgt).trim() !== '') st.wgt = String(p.wgt).trim();
+        st.done = true; rerenderCard(i); saveDraft();
+        if (typeof startRest === 'function') startRest(i, j);
+      } else {
+        st.done = false; rerenderCard(i); saveDraft();
+        if (typeof restBelongsTo === 'function' && restBelongsTo(i, j)) stopRest();
+      }
+      break;
+    }
     case 'addset': e.sets.push({ reps: '', wgt: '', note: '', showNote: false }); rerenderCard(i); saveDraft(); break;
-    case 'rmset': if (e.sets.length > 1) { e.sets.pop(); rerenderCard(i); saveDraft(); } break;
+    case 'rmset': if (e.sets.length > 1) { if (typeof restBelongsTo === 'function' && restBelongsTo(i, e.sets.length - 1)) stopRest(); e.sets.pop(); rerenderCard(i); saveDraft(); } break;
     case 'rmex': state.entries.splice(i, 1); renderLogger(); saveDraft(); break;
     case 'adhoc': showAdhoc(); break;
     case 'adhoc-add': addAdhoc(); break;
@@ -1156,6 +1199,7 @@ document.addEventListener('input', ev => {
   const t = ev.target; if (!t.dataset.f) return;
   const i = Number(t.dataset.i), j = Number(t.dataset.j), s = state.entries[i]?.sets[j]; if (!s) return;
   s[t.dataset.f] = t.value;
+  if (s.done && t.dataset.f !== 'note' && typeof restartRestFor === 'function') restartRestFor(i, j);
   const row = t.closest('.set-row'); if (row) row.classList.toggle('done', isFilled(s));
   document.getElementById('card-' + i)?.classList.toggle('has', state.entries[i].sets.some(isFilled));
   updateSaveBar(); saveDraft();
@@ -1279,5 +1323,7 @@ const DemoSource = (() => {
 })();
 </script>
 <script src="progress.js"></script>
+<script src="rest.js"></script>
+<script src="install.js"></script>
 </body>
 </html>

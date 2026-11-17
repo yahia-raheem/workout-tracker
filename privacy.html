@@ -55,6 +55,9 @@
     <li><strong>Sign-in tokens</strong> from Google are kept in your browser's memory for the current session only (about one hour) and are discarded when you close the page or sign out.</li>
     <li><strong>On your device</strong>, the app uses your browser's local storage to remember the last sheet you opened (its ID and name), the last workout day you selected, and unsaved workout entries so you don't lose them if the page reloads, and, if you unlocked PT mode, that PT mode is on for this device. This data stays on your device. You can clear it at any time by clearing your browser's site data for this page.</li>
   </ul>
+  <p>The rest timer runs on your device. If you allow notifications, they are created on your device by your browser when a rest period ends; nothing is sent to a server. While a rest timer runs, the app asks the browser to keep the screen on. A running timer is remembered in your browser's local storage so it survives a page reload.</p>
+  <p>If you install the app to your home screen, a small background script (service worker) is installed with it. It is only used to show notifications and does not store or send any data.</p>
+  <p>Plan files exported in PT mode are created on your device and go only where you choose to save or share them.</p>
   <p>Workout Log has no analytics, no tracking, no advertising and sets no cookies of its own.</p>
 
   <h2>Third-party services</h2>

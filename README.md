@@ -60,6 +60,31 @@ Run `python3 -m http.server 8000` again, open <http://localhost:8000>, sign in, 
 2. **Settings → Pages → Deploy from a branch → `main` / root**.
 3. Your app will be at `https://<username>.github.io/workout-log/`. Make sure `https://<username>.github.io` is in the OAuth client's JavaScript origins and in the API key's website restrictions (step 4 and 5).
 
+## Rest timer
+
+Each set's number is also its **done** button. Tap **1**, **2**, **3**… when you finish a set:
+
+- It turns into a lime ✓. If the set was empty, the plan's reps and last time's weight are filled in.
+- A rest countdown starts at the bottom, using that exercise's rest time from the plan (90 s if the plan has none). **+15s** adds time and **Skip** ends it.
+- Changing reps or weight on a ticked set restarts its timer. Tapping ✓ again un-ticks it and stops the timer.
+- When rest is over: three beeps, a vibration (Android), and the bar flashes "Rest over · Next: …".
+- The screen is kept awake while a timer runs, so the alert fires on time. A running timer survives a page reload.
+- **Notifications**: the first time a timer runs, the bar offers to send a notification when rest ends, for when the app isn't on screen. This is best effort, because phones pause web pages in the background: on Android it can be up to about a minute late, and on iPhone it needs the app to be installed (below).
+
+## Install as an app
+
+The app can be installed with its own icon. It then opens full screen, and on iPhone this is also what makes background notifications possible.
+
+- **Android (Chrome)**: tap **Install** on the banner, or ☰ → **Install as an app**.
+- **iPhone / iPad**: tap **Install** for the steps: Share → **Add to Home Screen** → Add.
+- Installed apps keep their own storage, so the first time you open the icon you sign in with Google again (and re-enter the PT password if you use PT mode).
+- `sw.js` (the background helper) does not cache anything, so updates to the site show up immediately.
+
+## Plan files (PT mode)
+
+- **Plan tab → ⤓ Export this plan as a file** saves the current plan as a `.json` file. On a phone it opens the share sheet (WhatsApp, Files…); on a computer it downloads.
+- **Create a new plan → A plan file** opens such a file in the editor, for example to give the same plan to another trainee. The name is taken from the file and can be changed. Exercises missing from this sheet's Settings tab are flagged in the review.
+
 ## Insights
 
 The **Insights** tab (next to **Log workout**, in PT mode only) builds dashboards from your sheet. Everything is calculated in the browser each time you open it, or when you tap **↻ Refresh**:

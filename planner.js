@@ -9,7 +9,7 @@
    ===================================================================== */
 
 // The plan being edited. mode: null (not editing) | 'edit' | 'create'
-const PL = { mode: null, name: '', days: [], dayIdx: 0, archive: true, orig: null, converted: 0, saving: false, source: null, archived: [] };
+const PL = { mode: null, name: '', days: [], dayIdx: 0, archive: true, orig: null, converted: 0, saving: false, source: null, archived: [], fileData: null };
 let plSeq = 0;
 const pid = () => `p${Date.now().toString(36)}${(plSeq++).toString(36)}`;
 const planDraftKey = () => `wl:planDraft:${state.sheet?.id}`;
@@ -47,6 +47,10 @@ function startEditing(mode, { from = 'copy', name = '', archive = true, archived
   PL.mode = mode; PL.archive = archive; PL.dayIdx = 0; PL.converted = cur.converted; PL.source = null;
   PL.orig = clone({ name: cur.name, days: cur.days });            // same ids, so changes can be listed
   if (mode === 'edit') { PL.name = cur.name; PL.days = cur.days; }
+  else if (from === 'file' && PL.fileData) {
+    PL.name = name; PL.days = planFromFile(PL.fileData); PL.converted = 0;
+    PL.source = { name: PL.fileData.name, file: true };
+  }
   else if (from === 'archive' && archived) {
     const a = planFromArchive(archived);
     PL.name = name; PL.days = a.days; PL.converted = a.converted;
@@ -143,6 +147,7 @@ function renderPlanHome() {
       <div style="display:grid;gap:10px;margin-top:14px">
         <button class="btn block" data-act="pl-edit">Edit this plan</button>
         <button class="btn ghost block" data-act="pl-new">Create a new plan</button>
+        <button class="text-btn" data-act="pl-export" style="justify-self:center">⤓ Export this plan as a file</button>
       </div>
     </section>
     <p class="small muted" style="line-height:1.5"><b style="color:var(--text)">Edit</b> keeps the plan name, so its history stays together.<br>
@@ -164,6 +169,9 @@ function renderPlanCreate() {
         <label id="plFromArcRow"><input type="radio" name="plFrom" value="archive" id="plFromArc" disabled><span style="flex:1;min-width:0"><b>A plan from the archive</b><br>
           <span class="muted small" id="plArcMsg">Looking for archived plans…</span>
           <select id="plArcPick" hidden style="display:block;width:100%;margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;color:var(--text);font-size:15px"></select></span></label>
+        <label><input type="radio" name="plFrom" value="file"><span style="flex:1;min-width:0"><b>A plan file</b><br>
+          <span class="muted small" id="plFileMsg">A .json file exported from Workout Log, e.g. from another trainee's sheet.</span>
+          <input type="file" id="plFile" accept=".json,application/json" hidden style="display:block;margin-top:8px;font-size:14px;max-width:100%"></span></label>
       </fieldset>
       <label class="pl-check"><input type="checkbox" id="plArchive" checked><span><b>Keep a copy of the current plan</b><br><span class="muted small">Saved to a “Plan Archive” tab in the sheet (created if needed) before it's replaced.</span></span></label>
       <div class="small err-text" id="plNewErr" style="min-height:18px;margin:8px 0"></div>
@@ -174,6 +182,58 @@ function renderPlanCreate() {
   loadArchivedPlans().then(fillArchiveChoice);
 }
 const defaultNameNote = () => `Must be different from “${esc(state.model.planName.trim())}”, so past workouts stay under that name.`;
+
+/* ----------------------------- plan files ----------------------------- */
+// A plan file is plain JSON, so the PT can move a plan between trainees' sheets.
+function planToFile() {
+  const m = state.model;
+  return { app: 'workout-log', kind: 'plan', version: 1, exportedAt: new Date().toISOString(), name: m.planName.trim(),
+    days: m.days.map(d => ({ name: d, exercises: m.plan.filter(p => p.day === d).map(p => ({
+      exercise: p.exercise, category: p.category, sets: numOr(p.sets), reps: numOr(p.reps), restSec: numOr(restToSec(p.rest)),
+      comment: p.notes || '', video: p.video || libVideo(p.exercise) || '' })) })) };
+}
+async function exportPlan() {
+  const data = planToFile();
+  const slug = (data.name || 'plan').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/gi, '-').replace(/^-+|-+$/g, '') || 'plan';
+  const fname = `${slug}.workout-plan.json`;
+  const file = new File([JSON.stringify(data, null, 2)], fname, { type: 'application/json' });
+  if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {     // phone: share sheet (WhatsApp, Files…)
+    try { await navigator.share({ files: [file], title: data.name }); return; }
+    catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a'); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  toast(`Saved “${fname}”`);
+}
+async function readPlanFile(f) {
+  const msg = $('#plFileMsg'); PL.fileData = null;
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const days = Array.isArray(data.days) ? data.days.filter(d => d && Array.isArray(d.exercises)) : [];
+    if (data.kind !== 'plan' || !days.length) throw new Error('not a plan');
+    PL.fileData = { name: String(data.name || '').trim(), days };
+    const n = days.reduce((t, d) => t + d.exercises.length, 0);
+    msg.innerHTML = `<b style="color:var(--text)">${esc(f.name)}</b>: ${days.length} day${days.length === 1 ? '' : 's'}, ${n} exercise${n === 1 ? '' : 's'}.`;
+    useFileName();
+  } catch {
+    msg.innerHTML = `<span class="err-text">“${esc(f.name)}” isn't a Workout Log plan file.</span>`;
+  }
+}
+function useFileName() {
+  if (!PL.fileData) return;
+  if (PL.fileData.name) $('#plNewName').value = PL.fileData.name;
+  $('#plNameNote').innerHTML = `Name taken from the file. Keep it, or change it if this sheet already uses that name for a different plan.`;
+  $('#plNewErr').textContent = '';
+}
+function planFromFile(data) {
+  return data.days.map(d => ({ id: pid(), name: String(d.name || 'Day').trim(), items: d.exercises.filter(x => x && x.exercise).map(x => {
+    const lib = state.model.libByName.get(norm(x.exercise));
+    return { id: pid(), ex: String(x.exercise).trim(), cat: String(x.category || lib?.category || '').trim(),
+      sets: String(x.sets ?? ''), reps: String(x.reps ?? ''), rest: String(x.restSec ?? ''), notes: String(x.comment || ''), video: String(x.video || lib?.video || '') };
+  }) }));
+}
 
 /* ----------------------------- archived plans ----------------------------- */
 // The Plan Archive tab holds one block of rows per archived plan: same Plan Name + Archived on.
@@ -333,7 +393,7 @@ function showPlanReview() {
     <p class="small muted" style="margin-top:-6px">This replaces the Plan tab in “${esc(state.sheet.name)}”. Past workouts in Historical Data are not changed.</p>
     ${PL.mode === 'create'
       ? `<p>New plan with <b>${PL.days.length} day${PL.days.length === 1 ? '' : 's'}</b> and <b>${n} exercise${n === 1 ? '' : 's'}</b>: ${PL.days.map(d => esc(d.name)).join(', ')}.</p>
-         ${PL.source ? `<p class="small muted">Loaded from the archive: “${esc(PL.source.name)}” (archived ${esc(fmtArchived(PL.source.when))}).</p>` : ''}
+         ${PL.source ? `<p class="small muted">${PL.source.file ? `Loaded from a plan file: “${esc(PL.source.name)}”.` : `Loaded from the archive: “${esc(PL.source.name)}” (archived ${esc(fmtArchived(PL.source.when))}).`}</p>` : ''}
          <p class="small muted">${PL.archive ? `The current plan “${esc(state.model.planName.trim())}” will be copied to the “Plan Archive” tab first.` : 'The current plan will not be kept anywhere else.'}</p>`
       : `<div class="eyebrow">Changes</div>
          <ul class="summary">${ch.map(c => `<li style="justify-content:flex-start;gap:10px"><b class="${sym[c.t][1]}" style="width:14px">${sym[c.t][0]}</b><span>${c.day ? `<b>${esc(c.day)}</b> · ` : ''}${esc(c.text)}</span></li>`).join('') || '<li><span class="muted">No changes.</span></li>'}</ul>`}
@@ -431,6 +491,7 @@ document.addEventListener('click', async ev => {
   const i = Number(t.dataset.i), d = curDay();
   switch (t.dataset.act) {
     case 'pl-home': renderPlanHome(); break;
+    case 'pl-export': exportPlan(); break;
     case 'pl-edit': startEditing('edit'); break;
     case 'pl-new': renderPlanCreate(); break;
     case 'pl-create-go': {
@@ -440,6 +501,7 @@ document.addEventListener('click', async ev => {
       if (norm(name) === norm(state.model.planName)) { $('#plNewErr').textContent = 'That is the current plan\'s name. Pick a new one.'; break; }
       const archived = from === 'archive' ? PL.archived?.[Number($('#plArcPick').value)] : null;
       if (from === 'archive' && !archived) { $('#plNewErr').textContent = 'Pick an archived plan.'; break; }
+      if (from === 'file' && !PL.fileData) { $('#plNewErr').textContent = 'Choose a plan file first.'; break; }
       startEditing('create', { name, from, archive: $('#plArchive').checked, archived });
       break;
     }
@@ -495,9 +557,12 @@ document.addEventListener('click', async ev => {
 document.addEventListener('change', ev => {
   if (ev.target.name === 'plFrom') {
     $('#plArcPick').hidden = ev.target.value !== 'archive';
+    $('#plFile').hidden = ev.target.value !== 'file';
     if (ev.target.value === 'archive') useArchivedName();
+    else if (ev.target.value === 'file') { if (PL.fileData) useFileName(); else $('#plFile').click(); }
     else { $('#plNameNote').innerHTML = defaultNameNote(); }
   } else if (ev.target.id === 'plArcPick') useArchivedName();
+  else if (ev.target.id === 'plFile') readPlanFile(ev.target.files[0]);
 });
 document.addEventListener('input', ev => {
   const f = ev.target.dataset && ev.target.dataset.pf; if (!f || !PL.mode) return;
