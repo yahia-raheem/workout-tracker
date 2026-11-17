@@ -80,7 +80,7 @@ Every chart has hover/tap tooltips and a **Show data** table.
 
 Insights are for the PT (and the owner) only. On the sign-in screen, or the sheet screen, tick **PT mode** and enter the PT password. The device then stays in PT mode until you choose **Exit PT mode** in the menu, or **Turn off** on the sign-in screen.
 
-- Without PT mode there is no Insights tab, and `insights.js` (the dashboards) is never loaded into the page.
+- Without PT mode there are no Insights or Plan tabs, and `insights.js` (dashboards) and `planner.js` (plan editor) are never loaded into the page.
 - The Go heavier / New best / Stalled hints on the Log workout cards come from `progress.js` and show for everyone.
 - The password itself is not stored anywhere. `pt-config.json` holds only a PBKDF2-SHA256 hash of it (310,000 iterations, random salt).
 - This is a lock against ordinary users, not a security boundary. The site is static, so someone technical could still open the dashboards with browser tools.
@@ -91,6 +91,21 @@ Insights are for the PT (and the owner) only. On the sign-in screen, or the shee
 ```bash
 python3 -c "import hashlib,os,base64,json,getpass; s=os.urandom(16); p=getpass.getpass('New PT password: ').encode(); print(json.dumps({'algorithm':'PBKDF2-SHA256','iterations':310000,'salt':base64.b64encode(s).decode(),'hash':base64.b64encode(hashlib.pbkdf2_hmac('sha256',p,s,310000)).decode()},indent=2))"
 ```
+
+## Plan editor (PT mode)
+
+The **Plan** tab writes the training plan into the open sheet's Plan tab, so the PT can set up each trainee's plan from the app.
+
+- **Edit this plan**: change the current plan and keep its name, so its workout history stays together. You can:
+  - add, rename, reorder (← Move / Move →) and delete days;
+  - add, change, reorder (↑ ↓) and remove exercises;
+  - set **Sets**, **Reps**, **Rest (sec)** and a **Comment** for each exercise.
+- **Create a new plan**: give it a new name, and start from a copy of the current plan or an empty one. *Keep a copy of the current plan* (on by default) first copies the old plan into a **Plan Archive** tab, which is created the first time. Each row records the plan name and the date it was archived.
+- Exercises are picked from the **Settings** tab, so names match the history. Their video links come along automatically.
+- Before anything is written, **Save plan** shows a review: every change, problems that block saving (no plan name, a day without exercises, sets not 1–20), and warnings such as missing reps.
+- Rest is saved in seconds. Older plans used small numbers for minutes (1 = 1 minute); the editor shows those as seconds (60) and saves them that way.
+- Unsaved plan changes stay on the device. If the page reloads, the editor picks up where it left off.
+- After saving, logging, the next-day choice and Insights use the new plan right away. Trainees get it the next time they open the app.
 
 ## Privacy policy
 

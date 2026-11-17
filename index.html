@@ -98,6 +98,31 @@
   #ptPw:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .err-text { color: var(--err); }
   .day-note { font-size: 13px; color: var(--muted); margin: -2px 0 4px; }
+  /* ---------- plan editor (PT) ---------- */
+  .eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 0 0 6px; }
+  .pl-days { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+  .pl-days > div { background: var(--card2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; }
+  .pl-choices { border: 0; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
+  .pl-choices legend { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 8px; }
+  .pl-choices label, .pl-check { display: flex; gap: 12px; align-items: flex-start; background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer; }
+  .pl-choices label:has(input:checked) { border-color: var(--accent); }
+  .pl-choices input, .pl-check input { width: 18px; height: 18px; accent-color: var(--accent); margin: 2px 0 0; flex: none; }
+  .pl-top { display: flex; align-items: center; justify-content: space-between; margin: 0 0 8px; }
+  .pl-daybar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin: -4px 0 4px; font-size: 14px; }
+  .text-btn:disabled { color: var(--muted); opacity: .5; cursor: default; }
+  .icon-btn:disabled { opacity: .35; cursor: default; }
+  .pl-add-day { border-style: dashed !important; color: var(--accent) !important; background: none !important; }
+  .pl-move { display: flex; flex-direction: column; gap: 4px; }
+  .pl-move .icon-btn { width: 30px; height: 26px; border-radius: 8px; }
+  .pl-del { color: var(--err) !important; }
+  .pl-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+  .pl-grid label, .pl-note { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  .pl-note { margin-top: 10px; }
+  .pl-grid input, .pl-note input { display: block; width: 100%; margin-top: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px; color: var(--text); font-size: 15px; text-transform: none; letter-spacing: 0; }
+  .pl-grid input { text-align: center; font-variant-numeric: tabular-nums; }
+  .pl-note input { font-size: 14px; }
+  .pl-grid input:focus, .pl-note input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .pl-add { color: var(--accent); } .pl-rem { color: var(--err); } .pl-mod { color: var(--warn); }
   .day-note b { color: var(--text); font-weight: 600; }
   .result { text-align: center; padding: 6px 2px 2px; }
   .sheet .result h3 { margin: 10px 0 6px; font-size: 20px; text-transform: none; }
@@ -439,8 +464,13 @@ const GoogleSource = {
   async addRows(id, sheetId, n) {
     await gfetch(`${SHEETS}${id}:batchUpdate`, { method: 'POST', body: JSON.stringify({ requests: [{ appendDimension: { sheetId, dimension: 'ROWS', length: n } }] }) });
   },
-  async update(id, range, values) {
-    await gfetch(`${SHEETS}${id}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`, { method: 'PUT', body: JSON.stringify({ range, majorDimension: 'ROWS', values }) });
+  // RAW stores text exactly as typed (a comment starting with "=" stays text); USER_ENTERED parses dates.
+  async update(id, range, values, input = 'USER_ENTERED') {
+    await gfetch(`${SHEETS}${id}/values/${encodeURIComponent(range)}?valueInputOption=${input}`, { method: 'PUT', body: JSON.stringify({ range, majorDimension: 'ROWS', values }) });
+  },
+  async addSheet(id, title) {
+    const j = await gfetch(`${SHEETS}${id}:batchUpdate`, { method: 'POST', body: JSON.stringify({ requests: [{ addSheet: { properties: { title } } }] }) });
+    return j.replies[0].addSheet.properties.sheetId;
   },
 };
 
@@ -551,9 +581,15 @@ function parseWorkbook(meta, raw, tabs) {
     if (!h.ok) add('error', `Couldn't find the header row in “${tabs.plan.title}”.`, `Missing columns: ${h.missing.join(', ')}`);
     else {
       // Plan name: a cell like "Plan Name:" above the header, value in the next non-empty cell
-      for (const r of raw.plan.slice(0, h.row)) {
+      m.planMeta = { title: tabs.plan.title, sheetId: tabs.plan.sheetId, headerRow: h.row, map: h.map, nameCell: null };
+      for (const [ri, r] of raw.plan.slice(0, h.row).entries()) {
         const i = (r || []).findIndex(c => norm(c).startsWith('plan name'));
-        if (i >= 0) { const v = r.slice(i + 1).find(c => String(c ?? '').trim() !== ''); if (v != null) m.planName = String(v); break; }
+        if (i >= 0) {
+          const off = r.slice(i + 1).findIndex(c => String(c ?? '').trim() !== '');
+          if (off >= 0) m.planName = String(r[i + 1 + off]);
+          m.planMeta.nameCell = { row: ri, col: i + 1 + Math.max(0, off) };   // 0-based
+          break;
+        }
       }
       if (!m.planName) add('warn', 'No “Plan Name:” cell found above the Plan table. Saved rows will have an empty Plan Name.');
       const badSets = [];
@@ -626,7 +662,10 @@ async function ptHash(password, cfg) {
   return bytesToB64(new Uint8Array(bits));
 }
 const ptActive = () => state.pt === true;
-async function loadPtModule() { if (typeof renderInsights !== 'function') await loadScript('insights.js'); }
+async function loadPtModule() {
+  if (typeof renderInsights !== 'function') await loadScript('insights.js');
+  if (typeof renderPlan !== 'function') await loadScript('planner.js');
+}
 async function initPt() {
   if (DEMO) state.pt = new URLSearchParams(location.search).has('pt');
   else {
@@ -678,19 +717,23 @@ document.addEventListener('change', e => { if (e.target.id === 'ptCheck') { $('#
 document.addEventListener('keydown', e => { if (e.target.id === 'ptPw' && e.key === 'Enter') { e.preventDefault(); tryUnlock(); } });
 
 /* ============================ flows ============================ */
+// Read the three tabs and check them; used on open and after the plan is edited.
+async function fetchModel(id) {
+  const meta = await state.ds.meta(id);
+  const tabs = {};
+  for (const [key, spec] of Object.entries(SCHEMA)) tabs[key] = meta.sheets.find(s => norm(s.title) === norm(spec.tab)) || null;
+  const keys = Object.keys(tabs).filter(k => tabs[k]);
+  const values = await state.ds.batchGet(id, keys.map(k => `${q(tabs[k].title)}!A1:Z`));
+  const raw = {}; keys.forEach((k, i) => raw[k] = values[i]);
+  return { meta, ...parseWorkbook(meta, raw, tabs) };
+}
 async function loadSheet(id, name) {
   state.sheet = { id, name };
   $('#sheetName').textContent = name || '';
   renderLoading('Reading and checking your sheet…');
   try {
-    const meta = await state.ds.meta(id);
+    const { meta, model, checks } = await fetchModel(id);
     state.sheet.name = meta.title; $('#sheetName').textContent = meta.title;
-    const tabs = {};
-    for (const [key, spec] of Object.entries(SCHEMA)) tabs[key] = meta.sheets.find(s => norm(s.title) === norm(spec.tab)) || null;
-    const keys = Object.keys(tabs).filter(k => tabs[k]);
-    const values = await state.ds.batchGet(id, keys.map(k => `${q(tabs[k].title)}!A1:Z`));
-    const raw = {}; keys.forEach((k, i) => raw[k] = values[i]);
-    const { model, checks } = parseWorkbook(meta, raw, tabs);
     state.model = model; state.checks = checks;
     if (!DEMO) store.set('wl:lastSheet', { id, name: meta.title });
     renderValidation();
@@ -888,7 +931,8 @@ function renderValidation() {
 }
 function tabsHTML(active) {
   if (!ptActive() || typeof renderInsights !== 'function') return '';   // trainees: no Insights tab at all
-  return `<nav class="tabs" role="tablist"><button class="${active === 'log' ? 'on' : ''}" data-act="tab" data-tab="log" role="tab">Log workout</button><button class="${active === 'insights' ? 'on' : ''}" data-act="tab" data-tab="insights" role="tab">Insights</button></nav>`;
+  const tab = (id, label) => `<button class="${active === id ? 'on' : ''}" data-act="tab" data-tab="${id}" role="tab">${label}</button>`;
+  return `<nav class="tabs" role="tablist">${tab('log', 'Log workout')}${tab('insights', 'Insights')}${typeof renderPlan === 'function' ? tab('plan', 'Plan') : ''}</nav>`;
 }
 function renderLogger() {
   setChrome({ menu: true, savebar: true });
@@ -1043,8 +1087,10 @@ document.addEventListener('click', async ev => {
     case 'change-sheet': closeModal(); renderPick(); window.scrollTo({ top: 0 }); break;
     case 'back-to-log': state.day ? renderLogger() : renderValidation(); break;
     case 'tab':
-      if (t.dataset.tab === 'insights' && ptActive() && typeof renderInsights === 'function') { saveDraft(); store.set('wl:tab', 'insights'); renderInsights(); }
-      else { store.set('wl:tab', 'log'); renderLogger(); }
+      if (t.dataset.tab === 'insights' && ptActive() && typeof renderInsights === 'function') { saveDraft(); renderInsights(); }
+      else if (t.dataset.tab === 'plan' && ptActive() && typeof renderPlan === 'function') { saveDraft(); renderPlan(); }
+      else if (!state.model.days.includes(state.day)) { state.suggestion = suggestDay(); startLogging(state.suggestion.day); }   // plan changed
+      else renderLogger();
       window.scrollTo({ top: 0 }); break;
     case 'guide': closeModal(); showGuide(t.dataset.reason); break;
     case 'pt-unlock': tryUnlock(); break;
@@ -1200,6 +1246,7 @@ const DemoSource = (() => {
     async batchGet(id, ranges) { await sleep(250); return ranges.map(r => book.tabs[tabOf(r)].map(row => row.map(c => String(c ?? '')))); },
     async batchGetRaw(id, ranges) { await sleep(250); return ranges.map(r => book.tabs[tabOf(r)].map(row => row.slice())); },
     async addRows() {},
+    async addSheet(id, title) { await sleep(200); book.tabs[title] = []; ids[title] = Math.max(...Object.values(ids)) + 1; return ids[title]; },
     async update(id, range, values) {
       await sleep(300);
       const tab = book.tabs[tabOf(range)];
