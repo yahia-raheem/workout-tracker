@@ -132,6 +132,20 @@
   .pl-grid input:focus, .pl-note input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
   .pl-add { color: var(--accent); } .pl-rem { color: var(--err); } .pl-mod { color: var(--warn); }
   .day-note b { color: var(--text); font-weight: 600; }
+  /* ---------- PT targets (purple is used for nothing else) ---------- */
+  .chip.pt { color: #c4b5fd; background: #221c33; }
+  .pt-band { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; background: #221c33; border: 1px solid #4c3d78; color: #ddd3ff; font-size: 13px; line-height: 1.35; }
+  .pt-band b { color: #fff; }
+  .set-row.head .pt-head { color: #c4b5fd; }
+  .ptcell { border: 1px solid #6d58b8; background: #1d1830; border-radius: 10px; padding: 5px 8px; text-align: left; line-height: 1.2; min-width: 0; color: inherit; }
+  .ptcell b { color: #c4b5fd; font-size: 14px; font-variant-numeric: tabular-nums; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ptcell small { display: block; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ptcell.chg { box-shadow: 0 0 0 2px #a78bfa; }
+  .ptnote { margin: -2px 0 6px 38px; font-size: 12px; color: #c4b5fd; }
+  .pt-sync { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: #c4b5fd; margin: 6px 0 0; }
+  .pt-sync .text-btn { font-size: 13px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); white-space: nowrap; }
+  .day.tgt::after { content: ' •'; color: #a78bfa; }
+  .tg-row { grid-template-columns: 30px 1fr 64px 70px 34px; }
   .result { text-align: center; padding: 6px 2px 2px; }
   .sheet .result h3 { margin: 10px 0 6px; font-size: 20px; text-transform: none; }
   .result p { margin: 6px 0 14px; }
@@ -384,6 +398,7 @@ const state = {
   picker: null,
   token: null, tokenExpiry: 0, tokenClient: null, pendingToken: null,
   sheet: null,              // { id, name }
+  tgtChanged: new Set(),    // PT target sets that just changed (outlined for a moment)
   model: null,              // parsed workbook
   checks: [],
   day: null,
@@ -690,6 +705,7 @@ const ptActive = () => state.pt === true;
 async function loadPtModule() {
   if (typeof renderInsights !== 'function') await loadScript('insights.js');
   if (typeof renderPlan !== 'function') await loadScript('planner.js');
+  if (typeof renderTargets !== 'function') await loadScript('targets.js');
 }
 async function initPt() {
   if (DEMO) state.pt = new URLSearchParams(location.search).has('pt');
@@ -748,9 +764,135 @@ async function fetchModel(id) {
   const tabs = {};
   for (const [key, spec] of Object.entries(SCHEMA)) tabs[key] = meta.sheets.find(s => norm(s.title) === norm(spec.tab)) || null;
   const keys = Object.keys(tabs).filter(k => tabs[k]);
-  const values = await state.ds.batchGet(id, keys.map(k => `${q(tabs[k].title)}!A1:Z`));
+  const tgtTab = meta.sheets.find(s => norm(s.title) === norm(TGT_TAB)) || null;   // optional, created by the PT
+  const ranges = keys.map(k => `${q(tabs[k].title)}!A1:Z`);
+  if (tgtTab) ranges.push(`${q(tgtTab.title)}!A1:H`);
+  const values = await state.ds.batchGet(id, ranges);
   const raw = {}; keys.forEach((k, i) => raw[k] = values[i]);
-  return { meta, ...parseWorkbook(meta, raw, tabs) };
+  const res = parseWorkbook(meta, raw, tabs);
+  res.model.targets = tgtTab ? parseTargets(values[keys.length]) : null;
+  return { meta, ...res };
+}
+
+/* ============================ PT targets ============================ */
+// The PT can set reps/weight per set for the trainee's next session. They live in a small
+// "PT Targets" tab that only ever holds one session: saving new targets replaces the old ones,
+// and the trainee's app empties it after that day's workout is saved.
+const TGT_TAB = 'PT Targets';
+const TGT_HEAD = ['Day', 'Exercise', 'Set', 'Reps', 'Weight', 'Note', 'Plan Name', 'Saved at'];
+const str = v => String(v ?? '').trim();
+const tgtFilled = s => !!s && (str(s.reps) !== '' || str(s.wgt) !== '');
+function parseTargets(rows) {
+  if (!rows || rows.length < 2) return null;
+  const head = (rows[0] || []).map(norm), ix = k => head.indexOf(norm(k));
+  const I = { day: ix('Day'), ex: ix('Exercise'), set: ix('Set'), reps: ix('Reps'), wgt: ix('Weight'), note: ix('Note'), plan: ix('Plan Name'), at: ix('Saved at') };
+  if (I.day < 0 || I.ex < 0 || I.set < 0) return null;
+  const t = { day: '', plan: '', savedAt: '', items: new Map() };
+  for (const r of rows.slice(1)) {
+    const day = str(r[I.day]), ex = str(r[I.ex]), set = parseInt(r[I.set]);
+    if (!day || !ex || !(set > 0 && set <= 20)) continue;
+    if (!t.day) { t.day = day; t.plan = I.plan >= 0 ? str(r[I.plan]) : ''; t.savedAt = I.at >= 0 ? str(r[I.at]) : ''; }
+    if (norm(day) !== norm(t.day)) continue;
+    const k = norm(ex);
+    if (!t.items.has(k)) t.items.set(k, { exercise: ex, sets: [] });
+    t.items.get(k).sets[set - 1] = { reps: I.reps >= 0 ? str(r[I.reps]) : '', wgt: I.wgt >= 0 ? str(r[I.wgt]) : '', note: I.note >= 0 ? str(r[I.note]) : '' };
+  }
+  for (const it of t.items.values()) for (let j = 0; j < it.sets.length; j++) it.sets[j] = it.sets[j] || { reps: '', wgt: '', note: '' };
+  return t.items.size ? t : null;
+}
+// "2026-11-21 18:40" (the PT's local time) → Date
+const tgtTime = t => { const m = str(t?.savedAt).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/); return m ? new Date(+m[1], m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)) : null; };
+// Targets count until that day has been logged on or after the day they were saved.
+function targetsUsed(t, m = state.model) {
+  const at = tgtTime(t); if (!at || typeof toDay !== 'function') return false;
+  const since = new Date(at.getFullYear(), at.getMonth(), at.getDate()), pn = norm(m.planName);
+  return m.historyRows.some(r => norm(r.day) === norm(t.day) && (!pn || !r.plan || norm(r.plan) === pn) && (toDay(r.date) || 0) >= since);
+}
+function activeTargets(m = state.model) {
+  const t = m?.targets; if (!t) return null;
+  if (t.plan && norm(t.plan) !== norm(m.planName)) return null;      // set for an older plan
+  if (!m.days.some(d => norm(d) === norm(t.day))) return null;
+  return targetsUsed(t, m) ? null : t;
+}
+function targetFor(e, day = state.day) {
+  const t = activeTargets();
+  if (!t || e.adhoc || norm(t.day) !== norm(day)) return null;
+  const it = t.items.get(norm(e.exercise));
+  return it && it.sets.some(tgtFilled) ? it : null;
+}
+const tgtText = s => str(s.reps) && str(s.wgt) ? `${s.reps} × ${s.wgt}` : str(s.wgt) ? `${s.wgt} kg` : `${s.reps} reps`;
+function agoText(d) {
+  if (!d) return '';
+  const min = Math.round((Date.now() - d) / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  if (min < 24 * 60 && d.getDate() === new Date().getDate()) return `today ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+// Match each exercise's number of sets to the PT's (only adds sets, or removes empty ones at the end).
+function applyTargetSets() {
+  (state.entries || []).forEach(e => {
+    const tg = targetFor(e); if (!tg) return;
+    while (e.sets.length < tg.sets.length) e.sets.push({ reps: '', wgt: '', note: '', showNote: false });
+    while (e.sets.length > tg.sets.length) {
+      const s = e.sets[e.sets.length - 1];
+      if (isFilled(s) || s.note || s.done) break;
+      e.sets.pop();
+    }
+  });
+}
+function ptSyncHTML() {
+  const t = activeTargets();
+  if (!t) return '';
+  if (norm(t.day) !== norm(state.day)) return `<div class="day-note">🧑‍🏫 Your PT set targets for <b>${esc(t.day)}</b>.</div>`;
+  return `<div class="pt-sync"><span>🧑‍🏫 Your PT set targets for this session · updated ${esc(agoText(tgtTime(t)))}</span><button class="text-btn" data-act="pt-refresh">↻ Refresh</button></div>`;
+}
+// Read the targets again while the trainee logs (every 30 s, and on ↻). Only the cards that
+// changed are redrawn, and whatever the trainee typed is never touched.
+async function refreshTargets(manual = false) {
+  if (state.tgtBusy || !state.model || !state.sheet) return;
+  state.tgtBusy = true;
+  try {
+    let rows = [];
+    try { [rows] = await state.ds.batchGet(state.sheet.id, [`${q(TGT_TAB)}!A1:H`]); }
+    catch (e) { if (e instanceof AuthError || e.status !== 400) throw e; }   // 400: the tab doesn't exist yet
+    const before = state.entries.map(e => targetFor(e));
+    const beforeDay = activeTargets()?.day;
+    state.model.targets = parseTargets(rows);
+    applyTargetSets();
+    const changed = [];
+    state.entries.forEach((e, i) => {
+      const a = before[i], b = targetFor(e);
+      if (JSON.stringify(a?.sets || null) === JSON.stringify(b?.sets || null)) return;
+      changed.push(i);
+      if (a && b) b.sets.forEach((s, j) => { if (JSON.stringify(s) !== JSON.stringify(a.sets[j] || null)) state.tgtChanged.add(`${norm(e.exercise)}|${j}`); });
+    });
+    if (!$('#cards')) return;                     // not on the logging screen any more
+    const focus = document.activeElement?.dataset?.f ? { f: document.activeElement.dataset.f, i: document.activeElement.dataset.i, j: document.activeElement.dataset.j, pos: document.activeElement.selectionStart } : null;
+    changed.forEach(i => rerenderCard(i));
+    const sync = $('#ptSync'); if (sync) sync.innerHTML = ptSyncHTML();
+    document.querySelectorAll('.day').forEach(b => b.classList.toggle('tgt', !!activeTargets() && norm(activeTargets().day) === norm(b.dataset.day)));
+    if (focus) { const el = document.querySelector(`[data-f="${focus.f}"][data-i="${focus.i}"][data-j="${focus.j}"]`); if (el) { el.focus(); try { el.setSelectionRange(focus.pos, focus.pos); } catch {} } }
+    if (changed.length && !manual) {
+      toast(beforeDay || before.some(Boolean) ? 'Your PT updated the targets' : 'Your PT set targets for this session');
+      try { navigator.vibrate?.(40); } catch {}
+      clearTimeout(state.tgtChgTimer);
+      state.tgtChgTimer = setTimeout(() => { state.tgtChanged.clear(); document.querySelectorAll('.ptcell.chg').forEach(el => el.classList.remove('chg')); }, 15000);
+    }
+    if (manual) toast(state.entries.some(e => targetFor(e)) ? 'PT targets are up to date' : 'No PT targets for this session');
+  } catch (e) {
+    if (manual) toast(e instanceof AuthError ? 'Your Google sign-in expired. Sign in again to refresh.' : 'Couldn\'t refresh: ' + e.message, 4000);
+  } finally { state.tgtBusy = false; }
+}
+setInterval(() => {
+  if (document.visibilityState === 'visible' && $('#cards') && !state.saving && (DEMO || tokenValid())) refreshTargets(false);
+}, 30000);
+// After the session is saved the targets are used up: empty the tab so it never builds up.
+async function clearTargets() {
+  const id = state.sheet.id;
+  let rows;
+  try { [rows] = await state.ds.batchGet(id, [`${q(TGT_TAB)}!A1:H`]); } catch { return; }
+  if (rows.length > 1) await state.ds.update(id, `${q(TGT_TAB)}!A2:H${rows.length}`, rows.slice(1).map(() => Array(8).fill('')), 'RAW');
 }
 async function loadSheet(id, name) {
   state.sheet = { id, name };
@@ -772,9 +914,14 @@ async function loadSheet(id, name) {
 // Which day to open: an unsaved workout first, otherwise the day after the last one saved,
 // following the order of days in the Plan tab (wrapping round after the last day).
 function suggestDay() {
-  const m = state.model, pn = norm(m.planName);
+  const m = state.model;
   const drafts = m.days.map(d => ({ day: d, at: store.get(draftKey(d))?.at || 0 })).filter(x => x.at).sort((a, b) => b.at - a.at);
   if (drafts.length) return { day: drafts[0].day, why: 'draft' };
+  return nextPlanDay(m);
+}
+// The day after the last one saved under the current plan (used for logging and for PT targets).
+function nextPlanDay(m = state.model) {
+  const pn = norm(m.planName);
   const idxOf = d => m.days.findIndex(x => norm(x) === norm(d));
   for (let i = m.historyRows.length - 1; i >= 0; i--) {
     const r = m.historyRows[i];
@@ -799,6 +946,7 @@ function startLogging(day) {
   const draft = store.get(draftKey(day));
   if (draft?.entries?.length) { state.entries = draft.entries; state.restored = true; }
   else { state.entries = entriesForDay(day); state.restored = false; }
+  applyTargetSets();
   renderLogger();
 }
 function entriesForDay(day) { return state.model.plan.filter(p => p.day === day).map(p => makeEntry(p, false)); }
@@ -823,10 +971,11 @@ function collectRows(when) {
     if (!isFilled(s)) return;
     const p = prevFor(e.exercise, j + 1);
     const wgt = num(s.wgt);
+    const ts = targetFor(e)?.sets[j], pt = tgtFilled(ts);      // the PT's target for this set, when there is one
     rows.push({ date: when, day: state.day, category: e.category, exercise: e.exercise, set: j + 1,
-      targetReps: num(e.targetReps), actualReps: num(s.reps),
-      targetWgt: p && String(p.wgt).trim() !== '' ? num(p.wgt) : wgt,   // target = last session's weight for this set
-      actualWgt: wgt, notes: (s.note || '').trim(), plan: state.model.planName });
+      targetReps: pt && str(ts.reps) ? num(ts.reps) : num(e.targetReps), actualReps: num(s.reps),
+      targetWgt: pt && str(ts.wgt) ? num(ts.wgt) : p && String(p.wgt).trim() !== '' ? num(p.wgt) : wgt,   // otherwise last session's weight for this set
+      actualWgt: wgt, notes: [(s.note || '').trim(), pt ? 'PT target' : ''].filter(Boolean).join(' · '), plan: state.model.planName });
   });
   return rows;
 }
@@ -866,9 +1015,11 @@ async function doSave(whenStr, { retry = false } = {}) {
   const exCount = new Set(rows.map(r => r.exercise)).size;
   openModal(`<div class="center" style="padding:18px 0"><div class="spinner"></div><b>Saving ${rows.length} set${rows.length > 1 ? 's' : ''}…</b><p class="muted small">Keep this page open.</p></div>`, { locked: true });
   try {
+    const usedTargets = state.entries.some(e => targetFor(e));
     const res = await writeRows(rows, { checkDuplicate: retry });
     rows.forEach(r => addHistory(state.model, { date: r.date, exercise: r.exercise, set: String(r.set), reps: String(r.actualReps), wgt: String(r.actualWgt), notes: r.notes, day: r.day, plan: r.plan }));
     store.del(draftKey(state.day));
+    if (usedTargets) { state.model.targets = null; clearTargets().catch(() => {}); }   // used up; a failure here is harmless
     if (typeof INS !== 'undefined') INS.data = null;   // insights and hints reload
     state.lastWrite = { range: res.range, rows };
     state.entries = entriesForDay(state.day); state.restored = false; state.suggestion = null;
@@ -957,16 +1108,19 @@ function renderValidation() {
 function tabsHTML(active) {
   if (!ptActive() || typeof renderInsights !== 'function') return '';   // trainees: no Insights tab at all
   const tab = (id, label) => `<button class="${active === id ? 'on' : ''}" data-act="tab" data-tab="${id}" role="tab">${label}</button>`;
-  return `<nav class="tabs" role="tablist">${tab('log', 'Log workout')}${tab('insights', 'Insights')}${typeof renderPlan === 'function' ? tab('plan', 'Plan') : ''}</nav>`;
+  const tg = typeof renderTargets === 'function';
+  return `<nav class="tabs" role="tablist">${tab('log', tg ? 'Log' : 'Log workout')}${tg ? tab('targets', 'Targets') : ''}${tab('insights', 'Insights')}${typeof renderPlan === 'function' ? tab('plan', 'Plan') : ''}</nav>`;
 }
 function renderLogger() {
   setChrome({ menu: true, savebar: true });
+  applyTargetSets();
   const m = state.model;
   $('#app').innerHTML = `${tabsHTML('log')}
     <div class="session-head">
       <div class="plan-name">${esc(m.planName.trim() || m.title)}</div>
-      <div class="days">${m.days.map(d => `<button class="day ${d === state.day ? 'active' : ''} ${store.get(draftKey(d)) ? 'draft' : ''}" data-act="day" data-day="${esc(d)}">${esc(d)}</button>`).join('')}</div>
+      <div class="days">${m.days.map(d => `<button class="day ${d === state.day ? 'active' : ''} ${store.get(draftKey(d)) ? 'draft' : ''} ${norm(activeTargets()?.day) === norm(d) ? 'tgt' : ''}" data-act="day" data-day="${esc(d)}">${esc(d)}</button>`).join('')}</div>
       ${dayNoteHTML()}
+      <div id="ptSync">${ptSyncHTML()}</div>
     </div>
     ${state.authLost ? `<div class="banner err"><span>Your Google session expired. Your entries are kept.</span><button class="btn" data-act="reauth">Sign in</button></div>` : ''}
     ${state.restored ? `<div class="banner"><span>Restored your unsaved entries for ${esc(state.day)}.</span><button class="text-btn" data-act="discard">Discard</button></div>` : ''}
@@ -980,19 +1134,21 @@ function renderLogger() {
 }
 function cardHTML(e, i) {
   const has = e.sets.some(isFilled);
+  const tg = targetFor(e);     // the PT's targets replace the automatic "go heavier / stalled" hints
   return `<section class="card ${has ? 'has' : ''}" id="card-${i}">
     <div class="card-head">
       <div class="titles">
-        <span class="chip">${esc(e.category || '—')}</span>${e.adhoc ? '<span class="chip adhoc">Added</span>' : ''}
+        <span class="chip">${esc(e.category || '—')}</span>${e.adhoc ? '<span class="chip adhoc">Added</span>' : ''}${tg ? '<span class="chip pt">PT targets</span>' : ''}
         <h3>${esc(e.exercise)}</h3>
         <div class="meta">${e.sets.length} set${e.sets.length > 1 ? 's' : ''} × ${esc(e.targetReps || '—')} reps${e.rest ? ` · Rest ${esc(fmtRest(e.rest))}` : ''}</div>
-        <div class="hint-slot" data-ex="${esc(e.exercise)}">${typeof logHint === 'function' ? logHint(e.exercise) : ''}</div>
+        ${tg ? '' : `<div class="hint-slot" data-ex="${esc(e.exercise)}">${typeof logHint === 'function' ? logHint(e.exercise) : ''}</div>`}
       </div>
       ${e.video ? `<button class="icon-btn video" data-act="video" data-i="${i}" aria-label="Watch exercise video">▶</button>` : ''}
     </div>
     ${e.notes ? `<p class="note" dir="auto">${esc(e.notes)}</p>` : ''}
+    ${tg ? `<div class="pt-band"><span aria-hidden="true">🧑‍🏫</span><span><b>Your PT's targets for today.</b> Tap a target to copy it, or tick ✓ when the set is done.</span></div>` : ''}
     <div class="sets">
-      <div class="set-row head"><span class="center">Set</span><span>Previous</span><span class="center">Reps</span><span class="center">kg</span><span></span></div>
+      <div class="set-row head"><span class="center">Set</span>${tg ? '<span class="pt-head">PT target</span>' : '<span>Previous</span>'}<span class="center">Reps</span><span class="center">kg</span><span></span></div>
       ${e.sets.map((s, j) => setHTML(e, i, s, j)).join('')}
     </div>
     <div class="card-foot">
@@ -1006,13 +1162,19 @@ function setHTML(e, i, s, j) {
   const p = prevFor(e.exercise, j + 1);
   const prevTxt = p ? `${p.reps || '–'} @ ${p.wgt || 0}${p.notes ? ' · ' + p.notes : ''}` : '—';
   const a = `data-i="${i}" data-j="${j}"`;
+  const ts = targetFor(e)?.sets[j], hasT = tgtFilled(ts);
+  const chg = hasT && state.tgtChanged.has(`${norm(e.exercise)}|${j}`);
+  const cell = hasT
+    ? `<button class="ptcell ${chg ? 'chg' : ''}" data-act="pt-fill" ${a} title="Copy your PT's target into this set" aria-label="PT target for set ${j + 1}: ${esc(tgtText(ts))}. Tap to copy."><b>${esc(tgtText(ts))}</b><small>prev ${esc(prevTxt)}</small></button>`
+    : `<button class="prev" data-act="fill" ${a} ${p ? '' : 'disabled'} title="${p ? 'Copy into this set' : 'No previous data'}">${esc(prevTxt)}</button>`;
   return `<div class="set-row ${isFilled(s) ? 'done' : ''}" ${a}>
       <button class="set-done ${s.done ? 'on' : ''}" data-act="done" ${a} aria-pressed="${s.done ? 'true' : 'false'}" aria-label="Set ${j + 1} ${s.done ? 'done, tap to undo' : 'not done, tap when finished'}">${s.done ? '✓' : j + 1}</button>
-      <button class="prev" data-act="fill" ${a} ${p ? '' : 'disabled'} title="${p ? 'Copy into this set' : 'No previous data'}">${esc(prevTxt)}</button>
-      <input inputmode="numeric" data-f="reps" ${a} value="${esc(s.reps)}" placeholder="${esc(e.targetReps)}" aria-label="Set ${j + 1} reps">
-      <input inputmode="decimal" data-f="wgt" ${a} value="${esc(s.wgt)}" placeholder="${esc(p?.wgt ?? '')}" aria-label="Set ${j + 1} weight">
+      ${cell}
+      <input inputmode="numeric" data-f="reps" ${a} value="${esc(s.reps)}" placeholder="${esc(hasT && str(ts.reps) ? ts.reps : e.targetReps)}" aria-label="Set ${j + 1} reps">
+      <input inputmode="decimal" data-f="wgt" ${a} value="${esc(s.wgt)}" placeholder="${esc(hasT && str(ts.wgt) ? ts.wgt : (p?.wgt ?? ''))}" aria-label="Set ${j + 1} weight">
       <button class="icon-btn small ${s.note ? 'on' : ''}" data-act="note" ${a} aria-label="Note for set ${j + 1}">✎</button>
     </div>
+    ${ts && str(ts.note) ? `<div class="ptnote" dir="auto">🧑‍🏫 ${esc(ts.note)}</div>` : ''}
     ${s.showNote || s.note ? `<div class="set-note"><input data-f="note" ${a} value="${esc(s.note)}" placeholder="Note for set ${j + 1} (e.g. Failure)" dir="auto"></div>` : ''}`;
 }
 function rerenderCard(i) {
@@ -1117,6 +1279,7 @@ document.addEventListener('click', async ev => {
     case 'tab':
       if (t.dataset.tab === 'insights' && ptActive() && typeof renderInsights === 'function') { saveDraft(); renderInsights(); }
       else if (t.dataset.tab === 'plan' && ptActive() && typeof renderPlan === 'function') { saveDraft(); renderPlan(); }
+      else if (t.dataset.tab === 'targets' && ptActive() && typeof renderTargets === 'function') { saveDraft(); renderTargets(); }
       else if (!state.model.days.includes(state.day)) { state.suggestion = suggestDay(); startLogging(state.suggestion.day); }   // plan changed
       else renderLogger();
       window.scrollTo({ top: 0 }); break;
@@ -1156,13 +1319,25 @@ document.addEventListener('click', async ev => {
       const p = prevFor(e.exercise, j + 1); if (!p) break;
       e.sets[j].reps = p.reps; e.sets[j].wgt = p.wgt; rerenderCard(i); saveDraft(); break;
     }
+    case 'pt-fill': {
+      const ts = targetFor(e)?.sets[j]; if (!tgtFilled(ts)) break;
+      if (str(ts.reps)) e.sets[j].reps = str(ts.reps);
+      if (str(ts.wgt)) e.sets[j].wgt = str(ts.wgt);
+      rerenderCard(i); saveDraft();
+      if (e.sets[j].done && typeof restartRestFor === 'function') restartRestFor(i, j);
+      break;
+    }
+    case 'pt-refresh': refreshTargets(true); break;
     case 'note': e.sets[j].showNote = !e.sets[j].showNote || !!e.sets[j].note; rerenderCard(i);
       document.querySelector(`.set-note input[data-i="${i}"][data-j="${j}"]`)?.focus(); break;
     case 'done': {
       const st = e.sets[j];
       if (!st.done) {
         // Ticking an empty set fills in the plan's reps and last time's weight.
-        const p = prevFor(e.exercise, j + 1);
+        // With PT targets, those numbers are used instead.
+        const p = prevFor(e.exercise, j + 1), ts = targetFor(e)?.sets[j];
+        if (String(st.reps).trim() === '' && ts && str(ts.reps)) st.reps = str(ts.reps);
+        if (String(st.wgt).trim() === '' && ts && str(ts.wgt)) st.wgt = str(ts.wgt);
         if (String(st.reps).trim() === '' && /^\d+(\.\d+)?$/.test(String(e.targetReps).trim())) st.reps = String(e.targetReps).trim();
         if (String(st.wgt).trim() === '' && p && String(p.wgt).trim() !== '') st.wgt = String(p.wgt).trim();
         st.done = true; rerenderCard(i); saveDraft();
@@ -1287,7 +1462,10 @@ const DemoSource = (() => {
   const tabOf = range => range.match(/^'((?:[^']|'')+)'!/)[1].replace(/''/g, "'");
   return {
     async meta() { await sleep(250); return { title: book.title, sheets: Object.keys(book.tabs).map(t => ({ title: t, sheetId: ids[t], rowCount: Math.max(1000, book.tabs[t].length) })) }; },
-    async batchGet(id, ranges) { await sleep(250); return ranges.map(r => book.tabs[tabOf(r)].map(row => row.map(c => String(c ?? '')))); },
+    async batchGet(id, ranges) {
+      await sleep(250);
+      return ranges.map(r => { const t = book.tabs[tabOf(r)]; if (!t) throw Object.assign(new Error('Unable to parse range: ' + r), { status: 400 }); return t.map(row => row.map(c => String(c ?? ''))); });
+    },
     async batchGetRaw(id, ranges) { await sleep(250); return ranges.map(r => book.tabs[tabOf(r)].map(row => row.slice())); },
     async addRows() {},
     async addSheet(id, title) { await sleep(200); book.tabs[title] = []; ids[title] = Math.max(...Object.values(ids)) + 1; return ids[title]; },

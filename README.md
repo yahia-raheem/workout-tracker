@@ -133,6 +133,17 @@ The **Plan** tab writes the training plan into the open sheet's Plan tab, so the
 - Unsaved plan changes stay on the device. If the page reloads, the editor picks up where it left off.
 - After saving, logging, the next-day choice and Insights use the new plan right away. Trainees get it the next time they open the app.
 
+## PT targets (PT mode)
+
+The **Targets** tab lets the PT set reps and weight per set for the trainee's **next session**, at the gym together or in advance.
+
+- The next session is worked out from the trainee's history (the day after the last one logged under the current plan); it's the only day that can get targets.
+- For each set: reps, kg and an optional note. *+ Set / − Set* change the number of sets for that session, and *Copy set 1 to all* fills the rest. Exercises left empty get no targets.
+- **Save targets** writes them to a **PT Targets** tab (created the first time). It only ever holds one session: saving again replaces what was there.
+- The trainee's app shows them on the logging screen with a purple **PT TARGETS** label: the PT's numbers replace the *Previous* column (last time is shown underneath), and ticking ✓ on an empty set fills them in. The *Go heavier / Stalled* hints are hidden on those exercises.
+- While the logging screen is open, the app checks for new targets every 30 seconds (or right away with *↻ Refresh*). Changed sets are outlined for a moment; anything the trainee already typed is never overwritten.
+- When the trainee saves the workout, sets with a PT target are written with the PT's numbers in **Target Reps / Target Wgt** and `PT target` in **Notes**, and the PT Targets tab is emptied. Targets also stop showing once that day has been logged, or when a new plan is saved.
+
 ## Privacy policy
 
 `privacy.html` is the app's privacy policy, linked from the sign-in screen, the footer and the menu. Use its address (`https://<username>.github.io/workout-tracker/privacy.html`) as the **Privacy policy link** in Google Auth Platform → Branding, and the app's address as the **Application home page**.
@@ -142,6 +153,7 @@ The **Plan** tab writes the training plan into the open sheet's Plan tab, so the
 | Tab | What the app uses |
 |---|---|
 | **Plan** | The header row with `Day, Category, Exercise, # Sets, Target Reps, Rest, Notes, Exercise Video link`, and the `Plan Name:` cell above it |
+| **PT Targets** | Optional, created by the PT: `Day, Exercise, Set, Reps, Weight, Note, Plan Name, Saved at` for the next session only |
 | **Settings** | `Category, Exercise, Video Link`: the library for ad-hoc exercises and fallback videos |
 | **Historical Data** | Reads the history for "Previous" values; writes one row per logged set to `Date, Day, Category, Exercise, Set, Target Reps, Actual Reps, Target Wgt, Actual Wgt, Notes, Plan Name` |
 
