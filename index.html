@@ -144,7 +144,14 @@
   .ptnote { margin: -2px 0 6px 38px; font-size: 12px; color: #c4b5fd; }
   .pt-sync { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: #c4b5fd; margin: 6px 0 0; }
   .pt-sync .text-btn { font-size: 13px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); white-space: nowrap; }
-  .day.tgt::after { content: ' •'; color: #a78bfa; }
+  .day.tgt::before, .day.tgu::before { content: ""; position: absolute; top: 4px; left: 6px; width: 7px; height: 7px; border-radius: 50%; background: #a78bfa; }
+  .day.tgu::before { background: none; border: 1.5px solid #a78bfa; width: 5px; height: 5px; }
+  .day.active.tgt::before { background: #4c1d95; } .day.active.tgu::before { border-color: #4c1d95; }
+  .tg-legend { font-size: 12px; color: var(--muted); margin: -4px 0 8px; }
+  .tg-legend i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #a78bfa; margin: 0 4px 0 0; vertical-align: 1px; }
+  .tg-legend i.u { background: none; border: 1.5px solid #a78bfa; width: 5px; height: 5px; }
+  .tg-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .tg-actions .btn { padding: 8px 12px; font-size: 14px; }
   .tg-row { grid-template-columns: 30px 1fr 64px 70px 34px; }
   .result { text-align: center; padding: 6px 2px 2px; }
   .sheet .result h3 { margin: 10px 0 6px; font-size: 20px; text-transform: none; }
@@ -766,57 +773,68 @@ async function fetchModel(id) {
   const keys = Object.keys(tabs).filter(k => tabs[k]);
   const tgtTab = meta.sheets.find(s => norm(s.title) === norm(TGT_TAB)) || null;   // optional, created by the PT
   const ranges = keys.map(k => `${q(tabs[k].title)}!A1:Z`);
-  if (tgtTab) ranges.push(`${q(tgtTab.title)}!A1:H`);
+  if (tgtTab) ranges.push(`${q(tgtTab.title)}!A1:I`);
   const values = await state.ds.batchGet(id, ranges);
   const raw = {}; keys.forEach((k, i) => raw[k] = values[i]);
   const res = parseWorkbook(meta, raw, tabs);
-  res.model.targets = tgtTab ? parseTargets(values[keys.length]) : null;
+  res.model.targets = tgtTab ? parseTargets(values[keys.length]) : new Map();
   return { meta, ...res };
 }
 
 /* ============================ PT targets ============================ */
-// The PT can set reps/weight per set for the trainee's next session. They live in a small
-// "PT Targets" tab that only ever holds one session: saving new targets replaces the old ones,
-// and the trainee's app empties it after that day's workout is saved.
+// The PT can set reps/weight per set for any day of the plan. They live in a small "PT Targets"
+// tab holding at most one block per plan day: saving a day replaces that day's block. When the
+// trainee saves that day's workout the block is marked "Used on <date>" (kept, so the PT can
+// reuse it with one tap) and stops showing to the trainee.
 const TGT_TAB = 'PT Targets';
-const TGT_HEAD = ['Day', 'Exercise', 'Set', 'Reps', 'Weight', 'Note', 'Plan Name', 'Saved at'];
+const TGT_HEAD = ['Day', 'Exercise', 'Set', 'Reps', 'Weight', 'Note', 'Plan Name', 'Saved at', 'Used on'];
+const TGT_COLS = TGT_HEAD.length;
 const str = v => String(v ?? '').trim();
 const tgtFilled = s => !!s && (str(s.reps) !== '' || str(s.wgt) !== '');
+// → Map(norm(day) → { day, plan, savedAt, usedOn, items: Map(norm(ex) → { exercise, sets: [{reps, wgt, note}] }) })
 function parseTargets(rows) {
-  if (!rows || rows.length < 2) return null;
+  const out = new Map();
+  if (!rows || rows.length < 2) return out;
   const head = (rows[0] || []).map(norm), ix = k => head.indexOf(norm(k));
-  const I = { day: ix('Day'), ex: ix('Exercise'), set: ix('Set'), reps: ix('Reps'), wgt: ix('Weight'), note: ix('Note'), plan: ix('Plan Name'), at: ix('Saved at') };
-  if (I.day < 0 || I.ex < 0 || I.set < 0) return null;
-  const t = { day: '', plan: '', savedAt: '', items: new Map() };
+  const I = { day: ix('Day'), ex: ix('Exercise'), set: ix('Set'), reps: ix('Reps'), wgt: ix('Weight'), note: ix('Note'), plan: ix('Plan Name'), at: ix('Saved at'), used: ix('Used on') };
+  if (I.day < 0 || I.ex < 0 || I.set < 0) return out;
+  const get = (r, k) => I[k] >= 0 ? str(r[I[k]]) : '';
   for (const r of rows.slice(1)) {
-    const day = str(r[I.day]), ex = str(r[I.ex]), set = parseInt(r[I.set]);
+    const day = get(r, 'day'), ex = get(r, 'ex'), set = parseInt(get(r, 'set'));
     if (!day || !ex || !(set > 0 && set <= 20)) continue;
-    if (!t.day) { t.day = day; t.plan = I.plan >= 0 ? str(r[I.plan]) : ''; t.savedAt = I.at >= 0 ? str(r[I.at]) : ''; }
-    if (norm(day) !== norm(t.day)) continue;
-    const k = norm(ex);
-    if (!t.items.has(k)) t.items.set(k, { exercise: ex, sets: [] });
-    t.items.get(k).sets[set - 1] = { reps: I.reps >= 0 ? str(r[I.reps]) : '', wgt: I.wgt >= 0 ? str(r[I.wgt]) : '', note: I.note >= 0 ? str(r[I.note]) : '' };
+    const dk = norm(day);
+    if (!out.has(dk)) out.set(dk, { day, plan: get(r, 'plan'), savedAt: get(r, 'at'), usedOn: get(r, 'used'), items: new Map() });
+    const b = out.get(dk), k = norm(ex);
+    if (!b.items.has(k)) b.items.set(k, { exercise: ex, sets: [] });
+    b.items.get(k).sets[set - 1] = { reps: get(r, 'reps'), wgt: get(r, 'wgt'), note: get(r, 'note') };
   }
-  for (const it of t.items.values()) for (let j = 0; j < it.sets.length; j++) it.sets[j] = it.sets[j] || { reps: '', wgt: '', note: '' };
-  return t.items.size ? t : null;
+  for (const b of out.values()) for (const it of b.items.values()) for (let j = 0; j < it.sets.length; j++) it.sets[j] = it.sets[j] || { reps: '', wgt: '', note: '' };
+  return out;
 }
 // "2026-11-21 18:40" (the PT's local time) → Date
 const tgtTime = t => { const m = str(t?.savedAt).match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?/); return m ? new Date(+m[1], m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)) : null; };
-// Targets count until that day has been logged on or after the day they were saved.
-function targetsUsed(t, m = state.model) {
-  const at = tgtTime(t); if (!at || typeof toDay !== 'function') return false;
-  const since = new Date(at.getFullYear(), at.getMonth(), at.getDate()), pn = norm(m.planName);
-  return m.historyRows.some(r => norm(r.day) === norm(t.day) && (!pn || !r.plan || norm(r.plan) === pn) && (toDay(r.date) || 0) >= since);
+const fmtShort = d => d ? d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+// Normally the trainee's save marks a block as used. As a safety net, a block also counts as
+// used once that day has been logged on a later date than it was saved.
+function targetsUsed(b, m = state.model) {
+  if (b.usedOn) return true;
+  const at = tgtTime(b); if (!at || typeof toDay !== 'function') return false;
+  const day0 = new Date(at.getFullYear(), at.getMonth(), at.getDate()), pn = norm(m.planName);
+  return m.historyRows.some(r => norm(r.day) === norm(b.day) && (!pn || !r.plan || norm(r.plan) === pn) && (toDay(r.date) || 0) > day0);
 }
-function activeTargets(m = state.model) {
-  const t = m?.targets; if (!t) return null;
-  if (t.plan && norm(t.plan) !== norm(m.planName)) return null;      // set for an older plan
-  if (!m.days.some(d => norm(d) === norm(t.day))) return null;
-  return targetsUsed(t, m) ? null : t;
+// The block for a day under the current plan (used or not), or null.
+function targetBlock(day, m = state.model) {
+  const b = m?.targets?.get(norm(day));
+  if (!b || (b.plan && norm(b.plan) !== norm(m.planName)) || !m.days.some(d => norm(d) === norm(day))) return null;
+  return [...b.items.values()].some(it => it.sets.some(tgtFilled)) ? b : null;
+}
+function activeTargets(day = state.day, m = state.model) {
+  const b = targetBlock(day, m);
+  return b && !targetsUsed(b, m) ? b : null;
 }
 function targetFor(e, day = state.day) {
-  const t = activeTargets();
-  if (!t || e.adhoc || norm(t.day) !== norm(day)) return null;
+  const t = activeTargets(day);
+  if (!t || e.adhoc) return null;
   const it = t.items.get(norm(e.exercise));
   return it && it.sets.some(tgtFilled) ? it : null;
 }
@@ -843,8 +861,10 @@ function applyTargetSets() {
 }
 function ptSyncHTML() {
   const t = activeTargets();
-  if (!t) return '';
-  if (norm(t.day) !== norm(state.day)) return `<div class="day-note">🧑‍🏫 Your PT set targets for <b>${esc(t.day)}</b>.</div>`;
+  if (!t) {
+    const others = state.model.days.filter(d => activeTargets(d));
+    return others.length ? `<div class="day-note">🧑‍🏫 Your PT set targets for <b>${others.map(esc).join(', ')}</b>.</div>` : '';
+  }
   return `<div class="pt-sync"><span>🧑‍🏫 Your PT set targets for this session · updated ${esc(agoText(tgtTime(t)))}</span><button class="text-btn" data-act="pt-refresh">↻ Refresh</button></div>`;
 }
 // Read the targets again while the trainee logs (every 30 s, and on ↻). Only the cards that
@@ -854,10 +874,9 @@ async function refreshTargets(manual = false) {
   state.tgtBusy = true;
   try {
     let rows = [];
-    try { [rows] = await state.ds.batchGet(state.sheet.id, [`${q(TGT_TAB)}!A1:H`]); }
+    try { [rows] = await state.ds.batchGet(state.sheet.id, [`${q(TGT_TAB)}!A1:I`]); }
     catch (e) { if (e instanceof AuthError || e.status !== 400) throw e; }   // 400: the tab doesn't exist yet
     const before = state.entries.map(e => targetFor(e));
-    const beforeDay = activeTargets()?.day;
     state.model.targets = parseTargets(rows);
     applyTargetSets();
     const changed = [];
@@ -871,10 +890,10 @@ async function refreshTargets(manual = false) {
     const focus = document.activeElement?.dataset?.f ? { f: document.activeElement.dataset.f, i: document.activeElement.dataset.i, j: document.activeElement.dataset.j, pos: document.activeElement.selectionStart } : null;
     changed.forEach(i => rerenderCard(i));
     const sync = $('#ptSync'); if (sync) sync.innerHTML = ptSyncHTML();
-    document.querySelectorAll('.day').forEach(b => b.classList.toggle('tgt', !!activeTargets() && norm(activeTargets().day) === norm(b.dataset.day)));
+    document.querySelectorAll('.day').forEach(b => b.classList.toggle('tgt', !!activeTargets(b.dataset.day)));
     if (focus) { const el = document.querySelector(`[data-f="${focus.f}"][data-i="${focus.i}"][data-j="${focus.j}"]`); if (el) { el.focus(); try { el.setSelectionRange(focus.pos, focus.pos); } catch {} } }
     if (changed.length && !manual) {
-      toast(beforeDay || before.some(Boolean) ? 'Your PT updated the targets' : 'Your PT set targets for this session');
+      toast(before.some(Boolean) ? 'Your PT updated the targets' : 'Your PT set targets for this session');
       try { navigator.vibrate?.(40); } catch {}
       clearTimeout(state.tgtChgTimer);
       state.tgtChgTimer = setTimeout(() => { state.tgtChanged.clear(); document.querySelectorAll('.ptcell.chg').forEach(el => el.classList.remove('chg')); }, 15000);
@@ -887,12 +906,14 @@ async function refreshTargets(manual = false) {
 setInterval(() => {
   if (document.visibilityState === 'visible' && $('#cards') && !state.saving && (DEMO || tokenValid())) refreshTargets(false);
 }, 30000);
-// After the session is saved the targets are used up: empty the tab so it never builds up.
-async function clearTargets() {
+// After the day's workout is saved its targets are used: stamp "Used on" (the PT can reuse them).
+async function markTargetsUsed(day, when) {
   const id = state.sheet.id;
-  let rows;
-  try { [rows] = await state.ds.batchGet(id, [`${q(TGT_TAB)}!A1:H`]); } catch { return; }
-  if (rows.length > 1) await state.ds.update(id, `${q(TGT_TAB)}!A2:H${rows.length}`, rows.slice(1).map(() => Array(8).fill('')), 'RAW');
+  const [rows] = await state.ds.batchGet(id, [`${q(TGT_TAB)}!A1:I`]);
+  if (!rows || rows.length < 2) return;
+  const col = TGT_COLS - 1;
+  const vals = rows.slice(1).map(r => [norm(r[0]) === norm(day) && !str(r[col]) ? when : str(r[col])]);
+  await state.ds.update(id, `${q(TGT_TAB)}!${colLetter(col)}1:${colLetter(col)}${rows.length}`, [[TGT_HEAD[col]], ...vals], 'RAW');
 }
 async function loadSheet(id, name) {
   state.sheet = { id, name };
@@ -1019,7 +1040,10 @@ async function doSave(whenStr, { retry = false } = {}) {
     const res = await writeRows(rows, { checkDuplicate: retry });
     rows.forEach(r => addHistory(state.model, { date: r.date, exercise: r.exercise, set: String(r.set), reps: String(r.actualReps), wgt: String(r.actualWgt), notes: r.notes, day: r.day, plan: r.plan }));
     store.del(draftKey(state.day));
-    if (usedTargets) { state.model.targets = null; clearTargets().catch(() => {}); }   // used up; a failure here is harmless
+    if (usedTargets) {                         // used up; if stamping fails, the date check in targetsUsed covers it
+      const b = state.model.targets?.get(norm(state.day)); if (b) b.usedOn = whenStr;
+      markTargetsUsed(state.day, whenStr).catch(() => {});
+    }
     if (typeof INS !== 'undefined') INS.data = null;   // insights and hints reload
     state.lastWrite = { range: res.range, rows };
     state.entries = entriesForDay(state.day); state.restored = false; state.suggestion = null;
@@ -1118,7 +1142,7 @@ function renderLogger() {
   $('#app').innerHTML = `${tabsHTML('log')}
     <div class="session-head">
       <div class="plan-name">${esc(m.planName.trim() || m.title)}</div>
-      <div class="days">${m.days.map(d => `<button class="day ${d === state.day ? 'active' : ''} ${store.get(draftKey(d)) ? 'draft' : ''} ${norm(activeTargets()?.day) === norm(d) ? 'tgt' : ''}" data-act="day" data-day="${esc(d)}">${esc(d)}</button>`).join('')}</div>
+      <div class="days">${m.days.map(d => `<button class="day ${d === state.day ? 'active' : ''} ${store.get(draftKey(d)) ? 'draft' : ''} ${activeTargets(d) ? 'tgt' : ''}" data-act="day" data-day="${esc(d)}">${esc(d)}</button>`).join('')}</div>
       ${dayNoteHTML()}
       <div id="ptSync">${ptSyncHTML()}</div>
     </div>

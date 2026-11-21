@@ -135,14 +135,16 @@ The **Plan** tab writes the training plan into the open sheet's Plan tab, so the
 
 ## PT targets (PT mode)
 
-The **Targets** tab lets the PT set reps and weight per set for the trainee's **next session**, at the gym together or in advance.
+The **Targets** tab lets the PT set reps and weight per set for any day of the plan, at the gym together or in advance.
 
-- The next session is worked out from the trainee's history (the day after the last one logged under the current plan); it's the only day that can get targets.
+- It opens on the trainee's **next** session (the day after the last one logged under the current plan), marked *· next*. Tap another day to set its targets.
 - For each set: reps, kg and an optional note. *+ Set / − Set* change the number of sets for that session, and *Copy set 1 to all* fills the rest. Exercises left empty get no targets.
-- **Save targets** writes them to a **PT Targets** tab (created the first time). It only ever holds one session: saving again replaces what was there.
+- **Save <day>** writes that day to a **PT Targets** tab (created the first time). The tab holds at most one block per plan day: saving a day replaces only that day's block.
+- Day buttons show a filled purple dot when a day has targets waiting, and a hollow one when its last targets were used.
+- **↺ Reuse last targets** (on a day whose targets were used) copies them back in, including set count and notes. **+2.5 kg on all** adds 2.5 kg to every set with a weight. Neither is saved until *Save*.
 - The trainee's app shows them on the logging screen with a purple **PT TARGETS** label: the PT's numbers replace the *Previous* column (last time is shown underneath), and ticking ✓ on an empty set fills them in. The *Go heavier / Stalled* hints are hidden on those exercises.
 - While the logging screen is open, the app checks for new targets every 30 seconds (or right away with *↻ Refresh*). Changed sets are outlined for a moment; anything the trainee already typed is never overwritten.
-- When the trainee saves the workout, sets with a PT target are written with the PT's numbers in **Target Reps / Target Wgt** and `PT target` in **Notes**, and the PT Targets tab is emptied. Targets also stop showing once that day has been logged, or when a new plan is saved.
+- When the trainee saves the workout, sets with a PT target are written with the PT's numbers in **Target Reps / Target Wgt** and `PT target` in **Notes**, and that day's block gets a **Used on** date, so the trainee no longer sees it. Targets also stop showing once that day is logged on a later date, or when a new plan is saved.
 
 ## Privacy policy
 
@@ -153,7 +155,7 @@ The **Targets** tab lets the PT set reps and weight per set for the trainee's **
 | Tab | What the app uses |
 |---|---|
 | **Plan** | The header row with `Day, Category, Exercise, # Sets, Target Reps, Rest, Notes, Exercise Video link`, and the `Plan Name:` cell above it |
-| **PT Targets** | Optional, created by the PT: `Day, Exercise, Set, Reps, Weight, Note, Plan Name, Saved at` for the next session only |
+| **PT Targets** | Optional, created by the PT: `Day, Exercise, Set, Reps, Weight, Note, Plan Name, Saved at, Used on`, one block per plan day |
 | **Settings** | `Category, Exercise, Video Link`: the library for ad-hoc exercises and fallback videos |
 | **Historical Data** | Reads the history for "Previous" values; writes one row per logged set to `Date, Day, Category, Exercise, Set, Target Reps, Actual Reps, Target Wgt, Actual Wgt, Notes, Plan Name` |
 
