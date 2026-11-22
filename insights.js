@@ -152,6 +152,7 @@ function drawInsights() {
       <div class="chart" id="chWeeks"></div>
     </section>
 
+    ${cardioSection(R)}
     ${planSection(pp)}
     ${exerciseTable()}
     <section class="panel ins" id="exDetail"></section>
@@ -166,10 +167,64 @@ function drawInsights() {
     tip: i => `<b>Week of ${fmtDate(weeks[i])}</b><br>${perWeek[i].length} workout${perWeek[i].length === 1 ? '' : 's'}${perWeek[i].length ? `<br><span class="muted">${perWeek[i].map(s => esc(s.day)).join(', ')}</span>` : ''}`,
     table: { head: ['Week of', 'Workouts', 'Days'], rows: weeks.map((w, i) => [fmtDate(w, true), perWeek[i].length, perWeek[i].map(s => s.day).join(', ')]) } }));
 
+  drawCardio();
   drawMuscles(rsets, R);
   drawExerciseDetail();
   drawBody();
   drawAll();
+}
+
+/* ----------------------------- cardio ----------------------------- */
+// Minutes are Actual Reps of every set in the cardio category, in plan days and "Other" sessions.
+// Weeks run Saturday → Friday (as on the trainee's logging screen).
+function cardioWeeks(R) {
+  const D = INS.data, cardio = D.sets.filter(x => isCardioCat(x.cat));
+  const now = weekStartOf(new Date());
+  let first = weekStartOf(INS.range === 'all' ? (cardio[0]?.date || D.sets[0]?.date || new Date()) : R.start);
+  if ((now - first) / (7 * DAY_MS) < 7) first = addDays(now, -7 * 7);            // at least 8 weeks
+  const weeks = [];
+  for (let w = first; w <= now; w = addDays(w, 7)) {
+    const end = addDays(w, 7), xs = cardio.filter(x => x.date >= w && x.date < end);
+    weeks.push({ start: w, min: Math.round(xs.reduce((t, x) => t + (x.reps > 0 ? x.reps : 0), 0)), current: w.getTime() === now.getTime(),
+      names: [...new Set(xs.map(x => x.name))] });
+  }
+  return { weeks, any: cardio.length > 0 };
+}
+function cardioSection(R) {
+  const target = state.model.cardioTarget;
+  const C = cardioWeeks(R);
+  INS.cardio = C;
+  if (!target && !C.any) return '';
+  const full = C.weeks.filter(w => !w.current), cur = C.weeks[C.weeks.length - 1];
+  const avg = full.length ? Math.round(full.reduce((t, w) => t + w.min, 0) / full.length) : 0;
+  let tiles;
+  if (target) {
+    const met = full.filter(w => w.min >= target).length;
+    let streak = 0; for (let i = full.length - 1; i >= 0 && full[i].min >= target; i--) streak++;
+    if (cur.min >= target) streak++;
+    tiles = `${tile('Target met', `${met} of ${full.length}`, 'full weeks')}${tile('Average', avg, 'min / week')}${tile('Streak', streak, `week${streak === 1 ? '' : 's'} met`)}`;
+  } else {
+    tiles = `${tile('This week', cur.min, 'minutes so far')}${tile('Average', avg, 'min / week')}${tile('Weeks with cardio', `${full.filter(w => w.min > 0).length} of ${full.length}`, 'full weeks')}`;
+  }
+  return `<section class="panel ins">
+    <h2>Cardio</h2>
+    <p class="sub">${target ? `Weekly target ${fmtNum(target)} min (set in the plan).` : 'No weekly target in the plan; the PT can add one in the Plan tab.'} Weeks run Saturday to Friday.</p>
+    ${target ? cardioMeterHTML(cardioWeek()) : ''}
+    <div class="tiles three">${tiles}</div>
+    <div class="chart" id="chCardio"></div>
+    ${target ? `<p class="small muted" style="margin:4px 0 0"><span style="color:${STATUS.good}">■</span> target met · <span style="color:#4a5060">■</span> missed · <span style="color:${SERIES[0]}">■</span> this week so far</p>` : ''}
+  </section>`;
+}
+function drawCardio() {
+  const C = INS.cardio, target = state.model.cardioTarget;
+  if (!C || !document.getElementById('chCardio')) return;
+  const W = C.weeks;
+  const status = w => w.current ? (target && w.min >= target ? 'met already' : 'in progress') : !target ? '' : w.min >= target ? 'met ✓' : 'missed';
+  addChart('chCardio', el => barChart(el, { labels: W.map(w => fmtDate(w.start)), values: W.map(w => w.min), height: 170,
+    colors: target ? W.map(w => w.current ? SERIES[0] : w.min >= target ? STATUS.good : '#4a5060') : null,
+    ref: target ? { value: target, label: `target ${fmtNum(target)}` } : null,
+    tip: i => `<b>Week of ${fmtDate(W[i].start)}</b><br>${W[i].min} min${target ? ` of ${fmtNum(target)} · ${status(W[i])}` : ''}${W[i].names.length ? `<br><span class="muted">${W[i].names.map(esc).join(', ')}</span>` : ''}`,
+    table: { head: ['Week of (Sat)', 'Minutes', ...(target ? ['Target'] : [])], rows: W.map(w => [fmtDate(w.start, true), w.min, ...(target ? [status(w)] : [])]) } }));
 }
 
 const tile = (label, value, sub) => `<div class="tile"><div class="t-label">${label}</div><div class="t-value">${value}</div><div class="t-sub">${sub}</div></div>`;
@@ -394,16 +449,18 @@ const roundTop = (x, y, w, h, r = 4) => {
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 };
 
-function barChart(el, { labels, values, height = 170, tip, table, integer }) {
+function barChart(el, { labels, values, height = 170, tip, table, integer, colors, ref }) {
   const F = frame(el, height);
-  const sc = niceScale(0, Math.max(...values, integer ? 3 : 1), 3, true);
+  const sc = niceScale(0, Math.max(...values, ref ? ref.value * 1.1 : 0, integer ? 3 : 1), 3, true);
   if (integer) { sc.vals = sc.vals.filter(v => Number.isInteger(v)); }
   const ax = yAxis(F, sc);
   const n = values.length, band = (F.w - F.l - F.r) / n, bw = Math.max(3, Math.min(28, band - 2));
   const xOf = i => F.l + band * i + band / 2;
-  const bars = values.map((v, i) => `<path d="${roundTop(xOf(i) - bw / 2, ax.y(v), bw, ax.y(0) - ax.y(v))}" fill="${SERIES[0]}"/>`).join('');
+  const bars = values.map((v, i) => `<path d="${roundTop(xOf(i) - bw / 2, ax.y(v), bw, ax.y(0) - ax.y(v))}" fill="${colors ? colors[i] : SERIES[0]}"/>`).join('');
   const hits = values.map((v, i) => `<rect x="${F.l + band * i}" y="${F.t}" width="${band}" height="${F.h - F.t - F.b}" fill="transparent" data-i="${i}"/>`).join('');
-  el.innerHTML = `${svgEl(F.w, F.h)}${ax.svg}${bars}${xLabels(F, labels, xOf, Math.floor((F.w - F.l) / 52))}<g class="hits">${hits}</g></svg>`;
+  const refSvg = ref ? `<line x1="${F.l}" x2="${F.w - F.r}" y1="${ax.y(ref.value)}" y2="${ax.y(ref.value)}" stroke="${STATUS.warning}" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="${F.w - F.r}" y="${ax.y(ref.value) - 5}" text-anchor="end" class="ax" style="fill:${STATUS.warning}">${esc(ref.label)}</text>` : '';
+  el.innerHTML = `${svgEl(F.w, F.h)}${ax.svg}${bars}${refSvg}${xLabels(F, labels, xOf, Math.floor((F.w - F.l) / 52))}<g class="hits">${hits}</g></svg>`;
   wireHover(el, i => tip ? tip(i) : `<b>${esc(labels[i])}</b><br>${fmtNum(values[i])}`, i => highlightBand(el, F, band, i));
   attachTable(el, table);
 }

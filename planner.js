@@ -9,7 +9,7 @@
    ===================================================================== */
 
 // The plan being edited. mode: null (not editing) | 'edit' | 'create'
-const PL = { mode: null, name: '', days: [], dayIdx: 0, archive: true, orig: null, converted: 0, saving: false, source: null, archived: [], fileData: null };
+const PL = { mode: null, name: '', cardio: '', days: [], dayIdx: 0, archive: true, orig: null, converted: 0, saving: false, source: null, archived: [], fileData: null };
 let plSeq = 0;
 const pid = () => `p${Date.now().toString(36)}${(plSeq++).toString(36)}`;
 const planDraftKey = () => `wl:planDraft:${state.sheet?.id}`;
@@ -33,34 +33,35 @@ function planFromModel() {
     if (String(rest) !== String(p.rest).trim() && p.rest !== '') converted++;
     return { id: pid(), ex: p.exercise, cat: p.category, sets: p.sets, reps: p.reps, rest, notes: p.notes || '', video: p.video || libVideo(p.exercise) };
   }) }));
-  return { name: m.planName.trim(), days, converted };
+  return { name: m.planName.trim(), cardio: m.cardioTarget ? String(m.cardioTarget) : '', days, converted };
 }
 function saveDraftPlan() {
   clearTimeout(saveDraftPlan.t);
   saveDraftPlan.t = setTimeout(() => {
     if (!PL.mode) return store.del(planDraftKey());
-    store.set(planDraftKey(), { mode: PL.mode, name: PL.name, days: PL.days, dayIdx: PL.dayIdx, archive: PL.archive, orig: PL.orig, converted: PL.converted, source: PL.source, at: Date.now() });
+    store.set(planDraftKey(), { mode: PL.mode, name: PL.name, cardio: PL.cardio, days: PL.days, dayIdx: PL.dayIdx, archive: PL.archive, orig: PL.orig, converted: PL.converted, source: PL.source, at: Date.now() });
   }, 300);
 }
 function startEditing(mode, { from = 'copy', name = '', archive = true, archived = null } = {}) {
   const cur = planFromModel();
   PL.mode = mode; PL.archive = archive; PL.dayIdx = 0; PL.converted = cur.converted; PL.source = null;
-  PL.orig = clone({ name: cur.name, days: cur.days });            // same ids, so changes can be listed
+  PL.orig = clone({ name: cur.name, cardio: cur.cardio, days: cur.days });   // same ids, so changes can be listed
+  PL.cardio = from === 'empty' ? '' : cur.cardio;
   if (mode === 'edit') { PL.name = cur.name; PL.days = cur.days; }
   else if (from === 'file' && PL.fileData) {
-    PL.name = name; PL.days = planFromFile(PL.fileData); PL.converted = 0;
+    PL.name = name; PL.days = planFromFile(PL.fileData); PL.converted = 0; PL.cardio = PL.fileData.cardio || '';
     PL.source = { name: PL.fileData.name, file: true };
   }
   else if (from === 'archive' && archived) {
     const a = planFromArchive(archived);
-    PL.name = name; PL.days = a.days; PL.converted = a.converted;
+    PL.name = name; PL.days = a.days; PL.converted = a.converted; PL.cardio = archived.cardio || '';
     PL.source = { name: archived.name, when: archived.when };
   }
   else { PL.name = name; PL.days = from === 'copy' ? clone(cur.days) : [{ id: pid(), name: 'Day 1', items: [] }]; }
   saveDraftPlan(); renderPlanEditor(); window.scrollTo({ top: 0 });
 }
 function stopEditing() {
-  Object.assign(PL, { mode: null, name: '', days: [], dayIdx: 0, orig: null, converted: 0, source: null });
+  Object.assign(PL, { mode: null, name: '', cardio: '', days: [], dayIdx: 0, orig: null, converted: 0, source: null });
   store.del(planDraftKey());
 }
 
@@ -70,6 +71,7 @@ function planChanges() {
   const o = PL.orig, out = [];
   if (PL.mode === 'create') return out;
   if (norm(o.name) !== norm(PL.name)) out.push({ t: '~', text: `Plan name: “${o.name}” → “${PL.name}”` });
+  if (str(o.cardio) !== str(PL.cardio)) out.push({ t: '~', text: `Weekly cardio target: ${str(o.cardio) ? o.cardio + ' min' : 'none'} → ${str(PL.cardio) ? PL.cardio + ' min' : 'none'}` });
   const oDays = new Map(o.days.map(d => [d.id, d]));
   PL.days.forEach(d => {
     const od = oDays.get(d.id);
@@ -188,6 +190,7 @@ const defaultNameNote = () => `Must be different from “${esc(state.model.planN
 function planToFile() {
   const m = state.model;
   return { app: 'workout-log', kind: 'plan', version: 1, exportedAt: new Date().toISOString(), name: m.planName.trim(),
+    cardioMinPerWeek: m.cardioTarget || null,
     days: m.days.map(d => ({ name: d, exercises: m.plan.filter(p => p.day === d).map(p => ({
       exercise: p.exercise, category: p.category, sets: numOr(p.sets), reps: numOr(p.reps), restSec: numOr(restToSec(p.rest)),
       comment: p.notes || '', video: p.video || libVideo(p.exercise) || '' })) })) };
@@ -213,7 +216,7 @@ async function readPlanFile(f) {
     const data = JSON.parse(await f.text());
     const days = Array.isArray(data.days) ? data.days.filter(d => d && Array.isArray(d.exercises)) : [];
     if (data.kind !== 'plan' || !days.length) throw new Error('not a plan');
-    PL.fileData = { name: String(data.name || '').trim(), days };
+    PL.fileData = { name: String(data.name || '').trim(), cardio: Number(data.cardioMinPerWeek) > 0 ? String(data.cardioMinPerWeek) : '', days };
     const n = days.reduce((t, d) => t + d.exercises.length, 0);
     msg.innerHTML = `<b style="color:var(--text)">${esc(f.name)}</b>: ${days.length} day${days.length === 1 ? '' : 's'}, ${n} exercise${n === 1 ? '' : 's'}.`;
     useFileName();
@@ -246,14 +249,14 @@ async function loadArchivedPlans() {
     const head = (rows[0] || []).map(norm);
     const col = re => head.findIndex(h => re.test(h));
     const C = { when: col(/^archived/), plan: col(/^plan( name)?$/), day: col(/^day$/), cat: col(/^category$/), ex: col(/^exercise$/),
-      sets: col(/sets?$/), reps: col(/^target reps?$/), rest: col(/^rest/), notes: col(/^notes?$/), video: col(/video/) };
+      sets: col(/sets?$/), reps: col(/^target reps?$/), rest: col(/^rest/), notes: col(/^notes?$/), video: col(/video/), cardio: col(/^weekly cardio/) };
     if (C.plan < 0 || C.day < 0 || C.ex < 0) return [];
     const get = (r, k) => C[k] >= 0 ? String(r[C[k]] ?? '').trim() : '';
     const groups = []; let lastKey = null;
     rows.slice(1).forEach(r => {
       if (!get(r, 'ex')) return;
       const key = `${get(r, 'plan')}|${get(r, 'when')}`;
-      if (key !== lastKey) { groups.push({ name: get(r, 'plan'), when: get(r, 'when'), rows: [] }); lastKey = key; }
+      if (key !== lastKey) { groups.push({ name: get(r, 'plan'), when: get(r, 'when'), cardio: get(r, 'cardio'), rows: [] }); lastKey = key; }
       groups[groups.length - 1].rows.push({ day: get(r, 'day'), cat: get(r, 'cat'), ex: get(r, 'ex'), sets: get(r, 'sets'), reps: get(r, 'reps'), rest: get(r, 'rest'), notes: get(r, 'notes'), video: get(r, 'video') });
     });
     PL.archived = groups.reverse();                                  // newest first
@@ -300,6 +303,9 @@ function renderPlanEditor() {
     <div class="pl-top"><button class="text-btn" data-act="pl-cancel" style="padding-left:0">Cancel</button><b>${PL.mode === 'edit' ? 'Edit plan' : 'New plan'}</b><span style="width:52px"></span></div>
     ${PL.resumed ? `<div class="banner"><span>Your unsaved plan changes were kept on this device.</span><button class="text-btn" data-act="pl-cancel">Discard</button></div>` : ''}
     <div class="field"><label for="plName">Plan name</label><input id="plName" data-pf="name" value="${esc(PL.name)}" autocomplete="off"></div>
+    <div class="field"><label for="plCardio">Weekly cardio target</label>
+      <div style="display:flex;align-items:center;gap:8px"><input id="plCardio" data-pf="cardio" value="${esc(PL.cardio || '')}" inputmode="numeric" placeholder="none" style="width:110px;text-align:center"><span class="muted">minutes per week</span></div>
+      <p class="small muted" style="margin:6px 0 0">Leave empty for no target. Counts minutes from every exercise in the cardio category, in plan days and “Other” sessions. Weeks run Saturday to Friday.</p></div>
     ${PL.converted ? `<p class="small muted">${PL.converted} rest time${PL.converted === 1 ? ' was' : 's were'} in minutes in the sheet and ${PL.converted === 1 ? 'is' : 'are'} shown here in seconds (1 → 60).</p>` : ''}
     <div class="eyebrow" style="margin-top:6px">Days, in rotation order</div>
     <div class="days">${PL.days.map((x, i) => `<button class="day ${i === PL.dayIdx ? 'active' : ''}" data-act="pl-day" data-i="${i}">${esc(x.name || 'Unnamed')}</button>`).join('')}<button class="day pl-add-day" data-act="pl-day-add">+ Day</button></div>
@@ -435,25 +441,43 @@ async function writePlan() {
     const name = PL.mode === 'edit' && norm(PL.name) === norm(m.planName) ? m.planName : PL.name.trim();
     await state.ds.update(id, `${q(tab.title)}!${colLetter(PM.nameCell.col)}${PM.nameCell.row + 1}`, [[name]], 'RAW');
   }
+  await writeCardioTarget(id, tab.title, fresh);
   return rows.length;
+}
+// The weekly cardio target lives next to the plan name: a "Weekly Cardio (min):" label and the
+// value to its right. It's found by its label; the first time, it goes in the first two empty
+// cells on the plan-name row (E3:F3 on the standard sheet), never over anything.
+async function writeCardioTarget(id, title, fresh) {
+  const PM = state.model.planMeta, v = numOr(str(PL.cardio));
+  if (PM.cardioCell) {
+    await state.ds.update(id, `${q(title)}!${colLetter(PM.cardioCell.col + 1)}${PM.cardioCell.row + 1}`, [[v > 0 ? v : '']], 'RAW');
+    return;
+  }
+  if (!(v > 0)) return;
+  const row = PM.nameCell ? PM.nameCell.row : Math.max(0, PM.headerRow - 1);
+  const cells = fresh[row] || [], empty = c => String(cells[c] ?? '').trim() === '';
+  let col = Math.max(4, (PM.nameCell ? PM.nameCell.col : 1) + 2);
+  while (!(empty(col) && empty(col + 1))) col++;
+  await state.ds.update(id, `${q(title)}!${colLetter(col)}${row + 1}:${colLetter(col + 1)}${row + 1}`, [['Weekly Cardio (min):', v]], 'RAW');
 }
 async function archiveCurrentPlan(meta) {
   const id = state.sheet.id, m = state.model, TITLE = 'Plan Archive';
-  const head = ['Archived on', 'Plan Name', 'Day', 'Category', 'Exercise', '# Sets', 'Target Reps', 'Rest', 'Notes', 'Exercise Video link'];
+  const head = ['Archived on', 'Plan Name', 'Day', 'Category', 'Exercise', '# Sets', 'Target Reps', 'Rest', 'Notes', 'Exercise Video link', 'Weekly Cardio (min)'];
   let tab = meta.sheets.find(s => norm(s.title) === norm(TITLE));
   if (!tab) {
     const sheetId = await state.ds.addSheet(id, TITLE);
     tab = { title: TITLE, sheetId, rowCount: 1000 };
-    await state.ds.update(id, `${q(TITLE)}!A1:J1`, [head], 'RAW');
   }
-  const [cur] = await state.ds.batchGet(id, [`${q(tab.title)}!A1:J`]);
+  const [cur] = await state.ds.batchGet(id, [`${q(tab.title)}!A1:K`]);
+  if (!cur.length || norm(cur[0]?.[10]) !== norm(head[10])) await state.ds.update(id, `${q(tab.title)}!A1:K1`, [head], 'RAW');   // new tab, or one from before the cardio column
+  if (!cur.length) cur.push(head);
   const d = new Date(), p2 = n => String(n).padStart(2, '0');
   const when = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;   // time keeps copies apart
-  const rows = m.plan.map(p => [when, m.planName.trim(), p.day, p.category, p.exercise, numOr(p.sets), numOr(p.reps), numOr(p.rest), p.notes || '', p.video || '']);
+  const rows = m.plan.map(p => [when, m.planName.trim(), p.day, p.category, p.exercise, numOr(p.sets), numOr(p.reps), numOr(p.rest), p.notes || '', p.video || '', m.cardioTarget || '']);
   if (!rows.length) return;
   const start = Math.max(cur.length, 1) + 1, end = start + rows.length - 1;
   if (end > tab.rowCount) await state.ds.addRows(id, tab.sheetId, end - tab.rowCount + 20);
-  await state.ds.update(id, `${q(tab.title)}!A${start}:J${end}`, rows, 'RAW');
+  await state.ds.update(id, `${q(tab.title)}!A${start}:K${end}`, rows, 'RAW');
 }
 async function savePlan() {
   if (PL.saving) return;
@@ -567,6 +591,7 @@ document.addEventListener('change', ev => {
 document.addEventListener('input', ev => {
   const f = ev.target.dataset && ev.target.dataset.pf; if (!f || !PL.mode) return;
   if (f === 'name') PL.name = ev.target.value;
+  else if (f === 'cardio') PL.cardio = ev.target.value.replace(/[^\d.]/g, '');
   else { const x = curDay()?.items[Number(ev.target.dataset.i)]; if (x) x[f] = ev.target.value; }
   saveDraftPlan(); updatePlanBar();
 });

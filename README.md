@@ -146,6 +146,15 @@ The **Targets** tab lets the PT set reps and weight per set for any day of the p
 - While the logging screen is open, the app checks for new targets every 30 seconds (or right away with *↻ Refresh*). Changed sets are outlined for a moment; anything the trainee already typed is never overwritten.
 - When the trainee saves the workout, sets with a PT target are written with the PT's numbers in **Target Reps / Target Wgt** and `PT target` in **Notes**, and that day's block gets a **Used on** date, so the trainee no longer sees it. Targets also stop showing once that day is logged on a later date, or when a new plan is saved.
 
+## Other sessions and cardio
+
+- **Other session**: on the logging screen, *Doing something else today? Log an Other session* opens an empty session for off-plan work (e.g. just cardio). Add exercises from the library (the picker opens on the cardio category). It's saved with **Day = Other**, which isn't a plan day, so the plan's next day doesn't move. After saving, the app goes back to the plan.
+- **Cardio cards**: exercises in the **cardio** category show **Minutes** and **Details** instead of reps and kg. Minutes go in **Actual Reps**, details (distance, incline, level…) in **Notes**, and the weight columns stay empty. Ticking a round doesn't start the rest timer.
+- **Weekly cardio target** (PT, Plan tab → Edit/Create): minutes per week. It's stored on the Plan tab next to the plan name as a `Weekly Cardio (min):` label with the value to its right; the app finds it by the label. The first time, it uses the first two empty cells on the plan-name row (E3:F3 on the standard sheet), never overwriting anything. It's also kept in **Plan Archive** (column *Weekly Cardio (min)*) and in exported plan files.
+- **Counting**: every set in the cardio category counts, in plan days and Other sessions. Weeks run **Saturday to Friday**.
+- **Trainee**: when the plan has a target, the logging screen shows a *Cardio this week* bar (including unsaved minutes) and the save panel shows where the week stands.
+- **Insights** (PT): a Cardio section with this week's bar, *Target met* (full weeks), average minutes per week, streak, and a weekly chart with the target as a dashed line. Without a target it shows minutes per week only.
+
 ## Privacy policy
 
 `privacy.html` is the app's privacy policy, linked from the sign-in screen, the footer and the menu. Use its address (`https://<username>.github.io/workout-tracker/privacy.html`) as the **Privacy policy link** in Google Auth Platform → Branding, and the app's address as the **Application home page**.

@@ -153,6 +153,18 @@
   .tg-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .tg-actions .btn { padding: 8px 12px; font-size: 14px; }
   .tg-row { grid-template-columns: 30px 1fr 64px 70px 34px; }
+  /* ---------- cardio & Other sessions ---------- */
+  .set-row.cardio-row { grid-template-columns: 30px 1fr 64px 1.25fr 0; }
+  .set-row.cardio-row input[data-f="note"] { text-align: left; }
+  .other-link { display: block; padding: 8px 0 0; font-weight: 700; text-align: left; }
+  .cm { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .cm .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; margin: 0; }
+  .cm .row b { font-variant-numeric: tabular-nums; }
+  .cm .bar { height: 8px; border-radius: 4px; background: var(--card2); margin: 8px 0 6px; overflow: hidden; }
+  .cm .bar i { display: block; height: 100%; border-radius: 4px; background: #3987e5; }
+  .cm.ok .bar i { background: #0ca30c; }
+  .cm .sub { font-size: 12px; color: var(--muted); }
+  .panel .cm { background: var(--card2); }
   .result { text-align: center; padding: 6px 2px 2px; }
   .sheet .result h3 { margin: 10px 0 6px; font-size: 20px; text-transform: none; }
   .result p { margin: 6px 0 14px; }
@@ -592,7 +604,7 @@ function findHeader(rows, spec) {
 function parseWorkbook(meta, raw, tabs) {
   const checks = [];
   const add = (level, msg, detail) => checks.push({ level, msg, detail });
-  const m = { title: meta.title, plan: [], days: [], planName: '', library: [], libByName: new Map(), libCats: new Map(), categories: [], history: null, historyRows: [], prev: new Map() };
+  const m = { title: meta.title, plan: [], days: [], planName: '', cardioTarget: null, library: [], libByName: new Map(), libCats: new Map(), categories: [], history: null, historyRows: [], prev: new Map() };
 
   // --- tabs exist
   for (const key of Object.keys(SCHEMA)) {
@@ -628,7 +640,16 @@ function parseWorkbook(meta, raw, tabs) {
     if (!h.ok) add('error', `Couldn't find the header row in “${tabs.plan.title}”.`, `Missing columns: ${h.missing.join(', ')}`);
     else {
       // Plan name: a cell like "Plan Name:" above the header, value in the next non-empty cell
-      m.planMeta = { title: tabs.plan.title, sheetId: tabs.plan.sheetId, headerRow: h.row, map: h.map, nameCell: null };
+      m.planMeta = { title: tabs.plan.title, sheetId: tabs.plan.sheetId, headerRow: h.row, map: h.map, nameCell: null, cardioCell: null, top: raw.plan.slice(0, h.row) };
+      // Weekly cardio target: a "Weekly Cardio (min):" label above the table, value in the cell to its right
+      for (const [ri, r] of raw.plan.slice(0, h.row).entries()) {
+        const i = (r || []).findIndex(c => /^weekly\s*cardio/i.test(String(c ?? '').trim()));
+        if (i < 0) continue;
+        m.planMeta.cardioCell = { row: ri, col: i };                       // the label; the value is at col + 1
+        const v = parseFloat(String(r[i + 1] ?? '').replace(',', '.'));
+        m.cardioTarget = v > 0 ? v : null;
+        break;
+      }
       for (const [ri, r] of raw.plan.slice(0, h.row).entries()) {
         const i = (r || []).findIndex(c => norm(c).startsWith('plan name'));
         if (i >= 0) {
@@ -676,7 +697,7 @@ function parseWorkbook(meta, raw, tabs) {
       raw.history.slice(h.row + 1).forEach(r => {
         const ex = String(r[h.map.exercise] ?? '').trim(); if (!ex) return;
         addHistory(m, { date: r[h.map.date] ?? '', exercise: ex, set: String(r[h.map.set] ?? '').trim(), reps: String(r[h.map.actualReps] ?? '').trim(), wgt: String(r[h.map.actualWgt] ?? '').trim(), notes: String(r[h.map.notes] ?? '').trim(),
-          day: String(r[h.map.day] ?? '').trim(), plan: String(r[h.map.plan] ?? '').trim() });
+          day: String(r[h.map.day] ?? '').trim(), plan: String(r[h.map.plan] ?? '').trim(), category: String(r[h.map.category] ?? '').trim() });
       });
       const last = m.historyRows.length ? m.historyRows[m.historyRows.length - 1].date : null;
       add('ok', `Historical Data: ${m.historyRows.length} logged sets${last ? `, last entry ${last}` : ''}. New sets will be added below them.`);
@@ -691,6 +712,46 @@ function addHistory(m, r) {
 }
 const prevFor = (ex, setNo) => state.model.prev.get(`${norm(ex)}|${setNo}`) || null;
 const libVideo = ex => state.model.libByName.get(norm(ex))?.video || '';
+
+/* ============================ cardio & Other sessions ============================ */
+// "Other" sessions are off-plan (e.g. just cardio). They're saved with Day = "Other", which isn't a
+// plan day, so the plan's next day doesn't move. Cardio exercises record minutes in Actual Reps and
+// details (distance, incline, level…) in Notes.
+const OTHER = 'Other';
+const isCardioCat = c => /cardio/i.test(String(c || ''));
+const isCardio = e => isCardioCat(e.category);
+const isCardioRow = r => isCardioCat(r.category || state.model?.libByName.get(norm(r.exercise))?.category);
+const minutesOf = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return n > 0 ? n : 0; };
+// Weeks run Saturday → Friday.
+const weekStartOf = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - (x.getDay() + 1) % 7); return x; };
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+function cardioMinutes(m, from, to) {
+  if (typeof toDay !== 'function') return 0;
+  let n = 0;
+  for (const r of m.historyRows) { if (!isCardioRow(r)) continue; const d = toDay(r.date); if (d && d >= from && d < to) n += minutesOf(r.reps); }
+  return Math.round(n);
+}
+const unsavedCardio = () => Math.round((state.entries || []).filter(isCardio).reduce((n, e) => n + e.sets.reduce((k, s) => k + minutesOf(s.reps), 0), 0));
+function cardioWeek(m = state.model, day = new Date()) {
+  const start = weekStartOf(day), end = addDays(start, 7);
+  return { start, end, done: cardioMinutes(m, start, end), target: m.cardioTarget };
+}
+const shortDate = (d, wd = false) => d.toLocaleDateString('en-GB', wd ? { weekday: 'short', day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short' });
+function cardioMeterHTML(w, extra = 0, inPanel = false) {
+  if (!w.target) return '';
+  const total = w.done + extra, left = Math.max(0, Math.round(w.target - total)), ok = total >= w.target;
+  const pct = Math.min(100, Math.round(total / w.target * 100));
+  const range = `week runs ${shortDate(w.start, true)} – ${shortDate(addDays(w.end, -1), true)}`;
+  const sub = extra ? `With today: ${total} / ${w.target} · ${ok ? 'target reached 🎉' : `${left} min to go`}`
+    : ok ? `Target reached this week 🎉 · ${range}` : `${left} min to go · ${range}`;
+  return `<div class="cm ${ok ? 'ok' : ''}"><p class="row"><span>🏃 Cardio this week</span><span><b>${total}</b> / ${w.target} min</span></p>
+    <div class="bar" role="progressbar" aria-label="Cardio minutes this week" aria-valuemin="0" aria-valuemax="${w.target}" aria-valuenow="${total}"><i style="width:${pct}%"></i></div>
+    <div class="sub">${esc(sub)}</div></div>`;
+}
+function refreshCardioMeter() {
+  const el = document.getElementById('cardioMeter');
+  if (el && state.model) el.innerHTML = cardioMeterHTML(cardioWeek(), unsavedCardio());
+}
 
 /* ============================ PT mode ============================ */
 // The Insights dashboards are for the PT (and the owner) only. The password is never stored:
@@ -834,7 +895,7 @@ function activeTargets(day = state.day, m = state.model) {
 }
 function targetFor(e, day = state.day) {
   const t = activeTargets(day);
-  if (!t || e.adhoc) return null;
+  if (!t || e.adhoc || isCardio(e)) return null;
   const it = t.items.get(norm(e.exercise));
   return it && it.sets.some(tgtFilled) ? it : null;
 }
@@ -936,7 +997,7 @@ async function loadSheet(id, name) {
 // following the order of days in the Plan tab (wrapping round after the last day).
 function suggestDay() {
   const m = state.model;
-  const drafts = m.days.map(d => ({ day: d, at: store.get(draftKey(d))?.at || 0 })).filter(x => x.at).sort((a, b) => b.at - a.at);
+  const drafts = [...m.days, OTHER].map(d => ({ day: d, at: store.get(draftKey(d))?.at || 0 })).filter(x => x.at).sort((a, b) => b.at - a.at);
   if (drafts.length) return { day: drafts[0].day, why: 'draft' };
   return nextPlanDay(m);
 }
@@ -952,6 +1013,7 @@ function nextPlanDay(m = state.model) {
   return { day: m.days[0], why: 'first' };
 }
 function dayNoteHTML() {
+  if (state.day === OTHER) return `<div class="day-note"><b>Other session</b>, not part of the plan. <b>${esc(nextPlanDay().day)}</b> stays your next plan day.</div>`;
   const s = state.suggestion;
   if (!s || s.day !== state.day) return '';
   let when = '';
@@ -995,7 +1057,7 @@ function collectRows(when) {
     const ts = targetFor(e)?.sets[j], pt = tgtFilled(ts);      // the PT's target for this set, when there is one
     rows.push({ date: when, day: state.day, category: e.category, exercise: e.exercise, set: j + 1,
       targetReps: pt && str(ts.reps) ? num(ts.reps) : num(e.targetReps), actualReps: num(s.reps),
-      targetWgt: pt && str(ts.wgt) ? num(ts.wgt) : p && String(p.wgt).trim() !== '' ? num(p.wgt) : wgt,   // otherwise last session's weight for this set
+      targetWgt: isCardio(e) ? '' : pt && str(ts.wgt) ? num(ts.wgt) : p && String(p.wgt).trim() !== '' ? num(p.wgt) : wgt,   // otherwise last session's weight for this set
       actualWgt: wgt, notes: [(s.note || '').trim(), pt ? 'PT target' : ''].filter(Boolean).join(' · '), plan: state.model.planName });
   });
   return rows;
@@ -1038,7 +1100,7 @@ async function doSave(whenStr, { retry = false } = {}) {
   try {
     const usedTargets = state.entries.some(e => targetFor(e));
     const res = await writeRows(rows, { checkDuplicate: retry });
-    rows.forEach(r => addHistory(state.model, { date: r.date, exercise: r.exercise, set: String(r.set), reps: String(r.actualReps), wgt: String(r.actualWgt), notes: r.notes, day: r.day, plan: r.plan }));
+    rows.forEach(r => addHistory(state.model, { date: r.date, exercise: r.exercise, set: String(r.set), reps: String(r.actualReps), wgt: String(r.actualWgt), notes: r.notes, day: r.day, plan: r.plan, category: r.category }));
     store.del(draftKey(state.day));
     if (usedTargets) {                         // used up; if stamping fails, the date check in targetsUsed covers it
       const b = state.model.targets?.get(norm(state.day)); if (b) b.usedOn = whenStr;
@@ -1046,13 +1108,18 @@ async function doSave(whenStr, { retry = false } = {}) {
     }
     if (typeof INS !== 'undefined') INS.data = null;   // insights and hints reload
     state.lastWrite = { range: res.range, rows };
-    state.entries = entriesForDay(state.day); state.restored = false; state.suggestion = null;
-    renderLogger();
+    const wasOther = state.day === OTHER, savedDay = state.day;
+    const cardioMin = Math.round(rows.filter(r => isCardioCat(r.category)).reduce((n, r) => n + minutesOf(r.actualReps), 0));
+    if (wasOther) { state.suggestion = suggestDay(); startLogging(state.suggestion.day); }   // back to the plan
+    else { state.entries = entriesForDay(state.day); state.restored = false; state.suggestion = null; renderLogger(); }
     window.scrollTo({ top: 0 });
     try { navigator.vibrate?.(60); } catch {}
     const d = new Date(`${whenStr}T12:00:00`);
+    const cw = cardioMin && state.model.cardioTarget && !isNaN(d) ? cardioWeek(state.model, d) : null;
     openModal(`<div class="result ok"><div class="r-icon" aria-hidden="true">✓</div><h3>Workout saved</h3>
-      <p><b>${rows.length} set${rows.length > 1 ? 's' : ''}</b> from <b>${exCount} exercise${exCount > 1 ? 's' : ''}</b> ${res.alreadySaved ? 'were already' : 'were'} added to Historical Data for <b>${esc(state.day)}</b>, ${esc(isNaN(d) ? whenStr : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}.</p>
+      <p><b>${rows.length} set${rows.length > 1 ? 's' : ''}</b> from <b>${exCount} exercise${exCount > 1 ? 's' : ''}</b> ${res.alreadySaved ? 'were already' : 'were'} added to Historical Data for <b>${esc(savedDay)}</b>, ${esc(isNaN(d) ? whenStr : d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}.</p>
+      ${cw ? `<p>🏃 Cardio that week: <b>${cw.done}</b> / ${cw.target} min${cw.done >= cw.target ? ' · target reached 🎉' : ` · ${Math.round(cw.target - cw.done)} min to go`}</p>` : ''}
+      ${wasOther ? `<p class="small muted">Back to the plan: <b>${esc(state.day)}</b> is next.</p>` : ''}
       <button class="btn block" data-act="close">Done</button>
       ${DEMO ? `<button class="btn ghost block" data-act="demo-rows" style="margin-top:10px">See the rows written (demo)</button>` : ''}</div>`, { locked: true });
   } catch (e) {
@@ -1142,14 +1209,18 @@ function renderLogger() {
   $('#app').innerHTML = `${tabsHTML('log')}
     <div class="session-head">
       <div class="plan-name">${esc(m.planName.trim() || m.title)}</div>
-      <div class="days">${m.days.map(d => `<button class="day ${d === state.day ? 'active' : ''} ${store.get(draftKey(d)) ? 'draft' : ''} ${activeTargets(d) ? 'tgt' : ''}" data-act="day" data-day="${esc(d)}">${esc(d)}</button>`).join('')}</div>
+      <div class="days">${state.day === OTHER || store.get(draftKey(OTHER)) ? `<button class="day ${state.day === OTHER ? 'active' : ''} ${store.get(draftKey(OTHER)) ? 'draft' : ''}" data-act="day" data-day="${OTHER}">${OTHER}</button>` : ''}${m.days.map(d => `<button class="day ${d === state.day ? 'active' : ''} ${store.get(draftKey(d)) ? 'draft' : ''} ${activeTargets(d) ? 'tgt' : ''}" data-act="day" data-day="${esc(d)}">${esc(d)}</button>`).join('')}</div>
       ${dayNoteHTML()}
+      ${state.day === OTHER ? `<button class="text-btn other-link" data-act="day" data-day="${esc(nextPlanDay().day)}">← Back to the plan</button>`
+        : `<button class="text-btn other-link" data-act="other">🏃 Doing something else today? Log an <u>Other</u> session</button>`}
       <div id="ptSync">${ptSyncHTML()}</div>
+      <div id="cardioMeter">${cardioMeterHTML(cardioWeek(), unsavedCardio())}</div>
     </div>
     ${state.authLost ? `<div class="banner err"><span>Your Google session expired. Your entries are kept.</span><button class="btn" data-act="reauth">Sign in</button></div>` : ''}
     ${state.restored ? `<div class="banner"><span>Restored your unsaved entries for ${esc(state.day)}.</span><button class="text-btn" data-act="discard">Discard</button></div>` : ''}
     <div id="cards">${state.entries.map(cardHTML).join('')}</div>
-    <button class="add-ex" data-act="adhoc">+ Add exercise (not in plan)</button>
+    ${state.day === OTHER && !state.entries.length ? `<p class="muted center" style="margin:18px 0 4px">Add what you did today, e.g. treadmill or bike.</p>` : ''}
+    <button class="add-ex" data-act="adhoc">${state.day === OTHER ? '+ Add exercise' : '+ Add exercise (not in plan)'}</button>
     <p class="small muted center" style="margin-top:18px">Tap a “Previous” value to copy it into the set. Only sets with reps or weight are saved.</p>`;
   updateSaveBar();
   if (typeof prefetchInsights === 'function') prefetchInsights();
@@ -1157,6 +1228,7 @@ function renderLogger() {
   if (typeof installBanner === 'function') installBanner();
 }
 function cardHTML(e, i) {
+  if (isCardio(e)) return cardioCardHTML(e, i);
   const has = e.sets.some(isFilled);
   const tg = targetFor(e);     // the PT's targets replace the automatic "go heavier / stalled" hints
   return `<section class="card ${has ? 'has' : ''}" id="card-${i}">
@@ -1178,6 +1250,40 @@ function cardHTML(e, i) {
     <div class="card-foot">
       <button class="text-btn" data-act="addset" data-i="${i}">+ Set</button>
       ${e.sets.length > 1 ? `<button class="text-btn" data-act="rmset" data-i="${i}">− Set</button>` : ''}
+      ${e.adhoc ? `<span style="flex:1"></span><button class="text-btn danger" data-act="rmex" data-i="${i}">Remove</button>` : ''}
+    </div>
+  </section>`;
+}
+// Cardio: minutes (→ Actual Reps) and details (→ Notes) instead of reps and kg.
+function cardioCardHTML(e, i) {
+  const has = e.sets.some(isFilled), n = e.sets.length;
+  return `<section class="card ${has ? 'has' : ''}" id="card-${i}">
+    <div class="card-head">
+      <div class="titles">
+        <span class="chip">${esc(e.category || '—')}</span>${e.adhoc && state.day !== OTHER ? '<span class="chip adhoc">Added</span>' : ''}
+        <h3>${esc(e.exercise)}</h3>
+        <div class="meta">${n > 1 ? `${n} rounds · ` : ''}${e.targetReps ? `${esc(e.targetReps)} min` : 'Minutes and details'}${e.rest ? ` · Rest ${esc(fmtRest(e.rest))}` : ''}</div>
+      </div>
+      ${e.video ? `<button class="icon-btn video" data-act="video" data-i="${i}" aria-label="Watch exercise video">▶</button>` : ''}
+    </div>
+    ${e.notes ? `<p class="note" dir="auto">${esc(e.notes)}</p>` : ''}
+    <div class="sets">
+      <div class="set-row head cardio-row"><span class="center">#</span><span>Previous</span><span class="center">Minutes</span><span>Details</span><span></span></div>
+      ${e.sets.map((s, j) => {
+        const p = prevFor(e.exercise, j + 1), a = `data-i="${i}" data-j="${j}"`;
+        const prevTxt = p ? `${p.reps || '–'} min${p.notes ? ' · ' + p.notes : ''}` : '—';
+        return `<div class="set-row cardio-row ${isFilled(s) ? 'done' : ''}" ${a}>
+          <button class="set-done ${s.done ? 'on' : ''}" data-act="done" ${a} aria-pressed="${s.done ? 'true' : 'false'}" aria-label="Round ${j + 1} ${s.done ? 'done, tap to undo' : 'not done, tap when finished'}">${s.done ? '✓' : j + 1}</button>
+          <button class="prev" data-act="fill" ${a} ${p ? '' : 'disabled'} title="${p ? 'Copy into this round' : 'No previous data'}">${esc(prevTxt)}</button>
+          <input inputmode="decimal" data-f="reps" ${a} value="${esc(s.reps)}" placeholder="${esc(e.targetReps || 'min')}" aria-label="Round ${j + 1} minutes">
+          <input data-f="note" ${a} value="${esc(s.note)}" placeholder="e.g. 5 km, incline 6" dir="auto" aria-label="Round ${j + 1} details (distance, incline, level…)">
+          <span></span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="card-foot">
+      <button class="text-btn" data-act="addset" data-i="${i}">+ Round</button>
+      ${n > 1 ? `<button class="text-btn" data-act="rmset" data-i="${i}">− Round</button>` : ''}
       ${e.adhoc ? `<span style="flex:1"></span><button class="text-btn danger" data-act="rmex" data-i="${i}">Remove</button>` : ''}
     </div>
   </section>`;
@@ -1213,6 +1319,7 @@ function updateSaveBar() {
   $('#saveCount').innerHTML = sets ? `<b>${sets}</b> set${sets > 1 ? 's' : ''} · <b>${exs}</b> exercise${exs > 1 ? 's' : ''}` : 'Nothing logged yet';
   $('#saveBtn').disabled = !sets || state.saving;
   $('#saveBtn').textContent = state.saving ? 'Saving…' : 'Save workout';
+  refreshCardioMeter();
 }
 
 /* ---------- modals ---------- */
@@ -1231,13 +1338,15 @@ function showVideo(e) {
 function showAdhoc() {
   const cats = state.model.categories;
   if (!state.model.library.length) { toast('The Settings library is empty.'); return; }
+  const other = state.day === OTHER, cardioCat = cats.find(isCardioCat);
+  const startCat = other && cardioCat ? cardioCat : cats[0];
   openModal(`<h3>Add an exercise</h3>
-    <p class="muted small" style="margin-top:-6px">It's saved under ${esc(state.day)} like the planned ones.</p>
-    <div class="field"><label>Category</label><select id="ahCat">${cats.map(c => `<option>${esc(c)}</option>`).join('')}</select></div>
+    <p class="muted small" style="margin-top:-6px">${other ? 'It\'s saved as an Other session, outside the plan.' : `It's saved under ${esc(state.day)} like the planned ones.`}</p>
+    <div class="field"><label>Category</label><select id="ahCat">${cats.map(c => `<option ${c === startCat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
     <div class="field"><label>Exercise</label><select id="ahEx"></select></div>
     <div class="two">
-      <div class="field"><label>Sets</label><input id="ahSets" type="number" min="1" max="20" value="3" inputmode="numeric"></div>
-      <div class="field"><label>Target reps</label><input id="ahReps" type="number" min="0" value="10" inputmode="numeric"></div>
+      <div class="field"><label id="ahSetsL">Sets</label><input id="ahSets" type="number" min="1" max="20" value="3" inputmode="numeric"></div>
+      <div class="field"><label id="ahRepsL">Target reps</label><input id="ahReps" type="number" min="0" value="10" inputmode="numeric"></div>
     </div>
     <div class="row"><button class="btn" data-act="adhoc-add">Add</button><button class="btn ghost" data-act="close">Cancel</button></div>`);
   const fill = () => {
@@ -1246,7 +1355,12 @@ function showAdhoc() {
       .sort((a, b) => a.it.exercise.localeCompare(b.it.exercise))
       .map(x => `<option value="${x.idx}">${esc(x.it.exercise)}</option>`).join('');
   };
-  $('#ahCat').addEventListener('change', fill); fill();
+  const kind = () => {                    // cardio: 1 round, target minutes (optional)
+    const c = isCardioCat($('#ahCat').value);
+    $('#ahSetsL').textContent = c ? 'Rounds' : 'Sets'; $('#ahRepsL').textContent = c ? 'Target minutes' : 'Target reps';
+    $('#ahSets').value = c ? 1 : 3; $('#ahReps').value = c ? '' : 10; $('#ahReps').placeholder = c ? 'optional' : '';
+  };
+  $('#ahCat').addEventListener('change', () => { fill(); kind(); }); fill(); kind();
 }
 function addAdhoc() {
   const it = state.model.library[Number($('#ahEx').value)];
@@ -1258,7 +1372,7 @@ function addAdhoc() {
 function showConfirm() {
   const items = state.entries.filter(e => e.sets.some(isFilled));
   const expired = !DEMO && !tokenValid();
-  openModal(`<h3>Save ${esc(state.day)}?</h3>
+  openModal(`<h3>Save ${state.day === OTHER ? "Other session" : esc(state.day)}?</h3>
     ${expired ? `<div class="banner err" style="margin-top:0">Your Google sign-in has expired. Tap “Sign in &amp; save” to sign in again; your entries are kept.</div>` : ''}
     <ul class="summary">${items.map(e => `<li><span>${esc(e.exercise)}${e.adhoc ? ' <span class="chip adhoc">Added</span>' : ''}</span><span class="muted">${e.sets.filter(isFilled).length} set(s)</span></li>`).join('')}</ul>
     <div class="field"><label>Session date</label><input id="when" type="date" value="${toLocalInput(new Date())}"></div>
@@ -1341,8 +1455,14 @@ document.addEventListener('click', async ev => {
     case 'video': showVideo(e); break;
     case 'fill': {
       const p = prevFor(e.exercise, j + 1); if (!p) break;
-      e.sets[j].reps = p.reps; e.sets[j].wgt = p.wgt; rerenderCard(i); saveDraft(); break;
+      e.sets[j].reps = p.reps;
+      if (isCardio(e)) e.sets[j].note = p.notes || ''; else e.sets[j].wgt = p.wgt;
+      rerenderCard(i); saveDraft(); break;
     }
+    case 'other':
+      saveDraft(); startLogging(OTHER); window.scrollTo({ top: 0 });
+      if (!state.entries.length) showAdhoc();
+      break;
     case 'pt-fill': {
       const ts = targetFor(e)?.sets[j]; if (!tgtFilled(ts)) break;
       if (str(ts.reps)) e.sets[j].reps = str(ts.reps);
@@ -1363,9 +1483,9 @@ document.addEventListener('click', async ev => {
         if (String(st.reps).trim() === '' && ts && str(ts.reps)) st.reps = str(ts.reps);
         if (String(st.wgt).trim() === '' && ts && str(ts.wgt)) st.wgt = str(ts.wgt);
         if (String(st.reps).trim() === '' && /^\d+(\.\d+)?$/.test(String(e.targetReps).trim())) st.reps = String(e.targetReps).trim();
-        if (String(st.wgt).trim() === '' && p && String(p.wgt).trim() !== '') st.wgt = String(p.wgt).trim();
+        if (String(st.wgt).trim() === '' && p && String(p.wgt).trim() !== '' && !isCardio(e)) st.wgt = String(p.wgt).trim();
         st.done = true; rerenderCard(i); saveDraft();
-        if (typeof startRest === 'function') startRest(i, j);
+        if (typeof startRest === 'function' && !isCardio(e)) startRest(i, j);   // no rest timer after cardio
       } else {
         st.done = false; rerenderCard(i); saveDraft();
         if (typeof restBelongsTo === 'function' && restBelongsTo(i, j)) stopRest();
@@ -1398,7 +1518,7 @@ document.addEventListener('input', ev => {
   const t = ev.target; if (!t.dataset.f) return;
   const i = Number(t.dataset.i), j = Number(t.dataset.j), s = state.entries[i]?.sets[j]; if (!s) return;
   s[t.dataset.f] = t.value;
-  if (s.done && t.dataset.f !== 'note' && typeof restartRestFor === 'function') restartRestFor(i, j);
+  if (s.done && t.dataset.f !== 'note' && !isCardio(state.entries[i]) && typeof restartRestFor === 'function') restartRestFor(i, j);
   const row = t.closest('.set-row'); if (row) row.classList.toggle('done', isFilled(s));
   document.getElementById('card-' + i)?.classList.toggle('has', state.entries[i].sets.some(isFilled));
   updateSaveBar(); saveDraft();
@@ -1411,7 +1531,7 @@ const DemoSource = (() => {
   const P = (d, c, e, s, r, rest, n, v) => ['', d, c, e, s, r, rest, n, v];
   const yt = id => id ? 'https://youtube.com/shorts/' + id : '';
   const plan = [
-    ['', 'Trainee Workout Planner'], [], ['', 'Plan Name:', 'upper A - lower A - upper B - lower B '],
+    ['', 'Trainee Workout Planner'], [], ['', 'Plan Name:', 'upper A - lower A - upper B - lower B ', '', 'Weekly Cardio (min):', 120],
     ['', 'Day', 'Category', 'Exercise', '# Sets', 'Target Reps', 'Rest', 'Notes', 'Exercise Video link'],
     P('upper A', 'mobility', 'thoracic mobility', 1, 15, 1, '', 'https://www.youtube.com/watch?v=hhvHpsxKjXw'),
     P('upper A', 'chest', 'neutral grip incline db press', 3, 10, 120, '', yt('OJMnnGUbjzM')),
@@ -1434,7 +1554,8 @@ const DemoSource = (() => {
     ['core', 'plank', 'https://www.youtube.com/shorts/xe2MXatLTUw'],
     ['core', 'side plank', 'https://youtube.com/shorts/Ye7G1wQCMgk'],
     ['shoulder', 'face pull', 'https://youtube.com/shorts/zi7waeqXpzw'],
-    ['cardio', 'incline treadmill', 'https://youtube.com/shorts/HwXYMPGjlUg']];
+    ['cardio', 'incline treadmill', 'https://youtube.com/shorts/HwXYMPGjlUg'],
+    ['cardio', 'bike', ''], ['cardio', 'elliptical', '']];
   // ~14 weeks of generated history so the Insights view has something to show.
   const PLAN = 'upper A - lower A - upper B - lower B ';
   const rnd = (seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; })(7);
@@ -1471,6 +1592,18 @@ const DemoSource = (() => {
       });
     }
   }
+  // "Other" cardio sessions: 0–3 a week, minutes in Actual Reps, details in Notes
+  const CARDIO = [['incline treadmill', m => `${(m * 0.09).toFixed(1)} km, incline ${6 + Math.round(rnd() * 4)}`], ['bike', () => `level ${7 + Math.round(rnd() * 4)}`], ['elliptical', () => `level ${5 + Math.round(rnd() * 3)}`]];
+  for (let w = W; w >= 0; w--) {
+    const n = 2 + Math.floor(rnd() * 3);
+    for (let k = 0; k < n; k++) {
+      const d = new Date(mon); d.setDate(d.getDate() - w * 7 + [2, 5, 6, 3][k]);
+      if (d > now) continue;
+      const [ex, det] = CARDIO[Math.floor(rnd() * CARDIO.length)], min = 30 + Math.round(rnd() * 6) * 5;
+      history.push(['', iso(d), 'Other', 'cardio', ex, 1, '', min, '', '', det(min), PLAN]);
+    }
+  }
+  history.splice(4, history.length - 4, ...history.slice(4).sort((a, b) => a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));   // by date, like a real log
   // Body Data, laid out like the real tab (inputs on top, table from row 10)
   const body = [[], ['', 'Body Measurements'], ['', 'Biological Sex', 'Male'], ['', 'Height (cm)', 162], ['', 'Measurement System', 'Metric'], [], [], [], [],
     ['', 'Date', 'Chest', 'Waist', 'Left Leg', 'Right Leg', 'Left Arm', 'Right Arm', 'Neck', 'Weight (kg)', 'Hips (cm)', 'BMI', 'Body Fat %', 'WHtR', 'Fat Mass (kg)', 'Lean Body Mass (kg)', 'WHR']];
