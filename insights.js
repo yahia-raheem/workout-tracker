@@ -94,10 +94,12 @@ function highlights(pp) {
 }
 
 /* ----------------------------- rendering ----------------------------- */
+// Training | Diet switch, when the sheet has a diet plan
+const insSeg = () => state.model?.hasDiet && typeof dietInsSegHTML === 'function' ? dietInsSegHTML('training') : '';
 function renderInsights() {
   setChrome({ menu: true });
   INS.charts = [];
-  $('#app').innerHTML = `${tabsHTML('insights')}<div class="panel center"><div class="spinner"></div><div class="muted">Crunching your history…</div></div>`;
+  $('#app').innerHTML = `${tabsHTML('insights')}${insSeg()}<div class="panel center"><div class="spinner"></div><div class="muted">Crunching your history…</div></div>`;
   loadInsightsData().then(drawInsights).catch(e => {
     if (e instanceof AuthError) { state.authLost = true; return renderSignin(e.message); }
     $('#app').innerHTML = `${tabsHTML('insights')}<div class="panel"><h2>Couldn't load insights</h2><p class="muted">${esc(e.message)}</p><button class="btn" data-act="ins-refresh">Try again</button></div>`;
@@ -108,7 +110,7 @@ function drawInsights() {
   const D = INS.data;
   INS.charts = [];
   if (!D.sessions.length) {
-    $('#app').innerHTML = `${tabsHTML('insights')}<div class="panel"><h2>No workouts yet</h2><p class="muted">Log a few sessions and your insights will show up here.</p></div>`;
+    $('#app').innerHTML = `${tabsHTML('insights')}${insSeg()}<div class="panel"><h2>No workouts yet</h2><p class="muted">Log a few sessions and your insights will show up here.</p></div>`;
     return;
   }
   const pp = planProgress();
@@ -124,7 +126,7 @@ function drawInsights() {
   const delta = (cur, before) => before === 0 ? '–' : pct((cur - before) / before);
 
   const rangeLabel = { '4w': 'last 4 weeks', '12w': 'last 12 weeks', all: 'all time' }[INS.range];
-  $('#app').innerHTML = `${tabsHTML('insights')}
+  $('#app').innerHTML = `${tabsHTML('insights')}${insSeg()}
     <div class="ins-head">
       <div class="seg" role="tablist" aria-label="Time range">
         ${[['4w', '4 weeks'], ['12w', '12 weeks'], ['all', 'All time']].map(([k, l]) => `<button class="${INS.range === k ? 'on' : ''}" data-act="ins-range" data-range="${k}">${l}</button>`).join('')}

@@ -140,8 +140,8 @@ function renderPlan() {
 function renderPlanHome() {
   setChrome({ menu: true });
   const m = state.model;
-  $('#app').innerHTML = `${tabsHTML('plan')}
-    <section class="panel">
+  $('#app').innerHTML = `${tabsHTML('plan')}${typeof planSegHTML === 'function' ? planSegHTML('workout') : ''}
+    <section class="panel" style="margin-top:0">
       <div class="eyebrow">Current plan</div>
       <h2>${esc(m.planName.trim() || 'Unnamed plan')}</h2>
       <p class="muted small">${m.days.length} day${m.days.length === 1 ? '' : 's'} · ${m.plan.length} exercises · in “${esc(state.sheet.name)}”</p>

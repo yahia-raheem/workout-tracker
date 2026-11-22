@@ -42,6 +42,7 @@
   .tabs { display: flex; gap: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 4px; margin: 4px 0 12px; }
   .tabs button { flex: 1; border: 0; background: none; border-radius: 9px; padding: 9px; font-weight: 700; color: var(--muted); }
   .tabs button.on { background: var(--card2); color: var(--text); }
+  .tabs.five button { padding: 9px 2px; font-size: 14px; }
   .ins-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 4px 0; }
   .seg { display: inline-flex; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
   .seg button { border: 0; background: none; color: var(--muted); padding: 6px 12px; border-radius: 8px; font-weight: 600; font-size: 14px; }
@@ -165,6 +166,81 @@
   .cm.ok .bar i { background: #0ca30c; }
   .cm .sub { font-size: 12px; color: var(--muted); }
   .panel .cm { background: var(--card2); }
+  /* ---------- diet ---------- */
+  .seg.wide { display: flex; margin: 0 0 12px; }
+  .seg.wide button { flex: 1; }
+  .dp { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin: 0 0 12px; }
+  .dp h3 { margin: 0 0 2px; font-size: 17px; }
+  .dp .meta { color: var(--muted); font-size: 13px; }
+  .dp .eyebrow { margin: 0; }
+  .d-inp { display: block; width: 100%; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; font-size: 15px; }
+  .d-inp.c { text-align: center; }
+  .d-lbl { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin: 10px 0 4px; }
+  .d-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .d-row4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .d-lim { display: grid; grid-template-columns: 52px 1fr; gap: 6px; }
+  .d-lim select { padding: 9px 2px; text-align: center; }
+  .mp { color: #7fb2ef; } .mc { color: #f0905c; } .mf { color: #5cc49c; }
+  .d-food { display: flex; gap: 10px; align-items: center; padding: 11px 0; border-top: 1px solid var(--line); width: 100%; background: none; border-left: 0; border-right: 0; border-bottom: 0; text-align: left; color: inherit; }
+  .d-food:first-child { border-top: 0; }
+  .d-food .n { flex: 1; min-width: 0; }
+  .d-food .n b { display: block; font-size: 15px; }
+  .d-food .n span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .d-chips { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 10px; scrollbar-width: none; }
+  .d-chips button { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 6px 12px; font-size: 13px; white-space: nowrap; color: var(--muted); flex: none; }
+  .d-chips button.on { background: var(--card2); color: var(--text); border-color: #3b4250; }
+  .d-check { font-size: 12px; margin-top: 8px; padding: 7px 10px; border-radius: 9px; background: var(--card2); color: var(--muted); }
+  .d-check.bad { color: #fcd9a0; background: #2a1f0c; }
+  .d-pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .d-pills > * { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-variant-numeric: tabular-nums; background: none; color: inherit; }
+  .d-pills button.add { color: var(--accent); }
+  .d-it { padding: 9px 0; border-top: 1px solid var(--line); }
+  .d-it .top { display: flex; gap: 8px; align-items: baseline; }
+  .d-it .top b { flex: 1; min-width: 0; font-size: 14px; }
+  .d-it .top span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .d-it .ctl { display: grid; grid-template-columns: 74px 92px 1fr auto; gap: 6px; align-items: center; margin-top: 6px; }
+  .d-it .ctl .d-inp { padding: 7px 6px; font-size: 14px; }
+  .d-it .ro { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .d-tot { margin-top: 8px; padding: 9px 10px; border-radius: 10px; background: var(--card2); font-size: 13px; line-height: 1.6; font-variant-numeric: tabular-nums; }
+  .d-ok { color: #4ade80; } .d-over { color: #fb923c; } .d-low { color: #fbbf24; }
+  .d-add { display: block; width: 100%; margin-top: 8px; border: 1px dashed var(--line); background: none; border-radius: 10px; padding: 9px; color: var(--accent); font-weight: 700; }
+  .d-bars { display: grid; gap: 10px; }
+  .d-mb .t { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .d-mb .t b { font-variant-numeric: tabular-nums; }
+  .d-mb .bar { height: 8px; border-radius: 4px; background: var(--card2); margin-top: 4px; overflow: hidden; }
+  .d-mb .bar i { display: block; height: 100%; border-radius: 4px; background: #3987e5; }
+  .d-meal { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); margin: 0 0 10px; }
+  .d-meal.open { border-color: #3b4250; }
+  .d-meal .hd { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; padding: 12px 14px; text-align: left; color: inherit; }
+  .d-meal .hd .t { flex: 1; min-width: 0; }
+  .d-meal .hd b { font-size: 16px; }
+  .d-meal .hd span.s { display: block; font-size: 12px; color: var(--muted); }
+  .d-meal .bd { padding: 0 14px 14px; }
+  .d-st { font-size: 12px; font-weight: 700; border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+  .d-st.eat { background: #13301f; color: #4ade80; } .d-st.cheat { background: #33240f; color: #fbbf24; } .d-st.skip { background: #2a2f3a; color: #c3c8d2; } .d-st.todo { background: var(--card2); color: var(--muted); }
+  .d-sbtn { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0 0 6px; }
+  .d-sbtn button { border: 1px solid var(--line); background: var(--card2); border-radius: 10px; padding: 8px 2px; font-size: 12px; font-weight: 700; color: var(--text); }
+  .d-sbtn button.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .d-sbtn button:disabled { opacity: .4; }
+  .d-sup { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--line); width: 100%; background: none; border-left: 0; border-right: 0; border-bottom: 0; color: inherit; text-align: left; }
+  .d-sup:first-of-type { border-top: 0; }
+  .d-box { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--line); display: grid; place-items: center; font-weight: 800; flex: none; }
+  .d-box.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .d-glass { display: flex; gap: 5px; flex-wrap: wrap; }
+  .d-glass i { width: 20px; height: 26px; border: 2px solid #3987e5; border-radius: 3px 3px 7px 7px; display: block; }
+  .d-glass i.f { background: #3987e5; }
+  .d-nav { display: flex; align-items: center; justify-content: space-between; margin: 0 0 10px; }
+  .d-nav button { border: 1px solid var(--line); background: var(--card); border-radius: 10px; width: 42px; height: 38px; color: var(--text); font-size: 18px; }
+  .d-nav button:disabled { opacity: .3; }
+  .d-nav b { font-size: 16px; }
+  .d-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .d-tbl td, .d-tbl th { padding: 7px 4px; border-top: 1px solid var(--line); text-align: left; }
+  .d-tbl th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-top: 0; }
+  .d-tbl .r { text-align: right; font-variant-numeric: tabular-nums; }
+  .d-warn { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #6b4a12; background: #2a1f0c; color: #fcd9a0; font-size: 13px; line-height: 1.45; }
+  .btn.danger { background: #f87171; color: #1a0505; }
+  .d-list { max-height: 52vh; overflow-y: auto; margin: 8px -4px 0; padding: 0 4px; }
+  textarea.d-inp { min-height: 80px; resize: vertical; font: inherit; }
   .result { text-align: center; padding: 6px 2px 2px; }
   .sheet .result h3 { margin: 10px 0 6px; font-size: 20px; text-transform: none; }
   .result p { margin: 6px 0 14px; }
@@ -774,6 +850,8 @@ async function loadPtModule() {
   if (typeof renderInsights !== 'function') await loadScript('insights.js');
   if (typeof renderPlan !== 'function') await loadScript('planner.js');
   if (typeof renderTargets !== 'function') await loadScript('targets.js');
+  if (typeof renderDiet !== 'function') await loadScript('diet.js');
+  if (typeof renderDietPlanner !== 'function') await loadScript('dietpt.js');
 }
 async function initPt() {
   if (DEMO) state.pt = new URLSearchParams(location.search).has('pt');
@@ -835,10 +913,20 @@ async function fetchModel(id) {
   const tgtTab = meta.sheets.find(s => norm(s.title) === norm(TGT_TAB)) || null;   // optional, created by the PT
   const ranges = keys.map(k => `${q(tabs[k].title)}!A1:Z`);
   if (tgtTab) ranges.push(`${q(tgtTab.title)}!A1:I`);
+  // Diet (optional): Foods + Diet Plan are small and come in the same request. The Diet Log is
+  // only read when the Diet screens open.
+  const dietTabs = { foods: meta.sheets.find(s => norm(s.title) === 'foods') || null, plan: meta.sheets.find(s => norm(s.title) === 'diet plan') || null,
+    log: meta.sheets.find(s => norm(s.title) === 'diet log') || null };
+  const dIdx = ranges.length;
+  if (dietTabs.foods) ranges.push(`${q(dietTabs.foods.title)}!A1:H`);
+  if (dietTabs.plan) ranges.push(`${q(dietTabs.plan.title)}!A1:J`);
   const values = await state.ds.batchGet(id, ranges);
   const raw = {}; keys.forEach((k, i) => raw[k] = values[i]);
   const res = parseWorkbook(meta, raw, tabs);
   res.model.targets = tgtTab ? parseTargets(values[keys.length]) : new Map();
+  let k = dIdx;
+  res.model.dietRaw = { tabs: dietTabs, foods: dietTabs.foods ? values[k++] : null, plan: dietTabs.plan ? values[k++] : null };
+  res.model.hasDiet = !!res.model.dietRaw.plan?.some(r => norm(r?.[0]) === 'plan' && String(r?.[2] ?? '').trim());
   return { meta, ...res };
 }
 
@@ -1197,10 +1285,19 @@ function renderValidation() {
     </div></div>`;
 }
 function tabsHTML(active) {
-  if (!ptActive() || typeof renderInsights !== 'function') return '';   // trainees: no Insights tab at all
+  const diet = !!state.model?.hasDiet;
   const tab = (id, label) => `<button class="${active === id ? 'on' : ''}" data-act="tab" data-tab="${id}" role="tab">${label}</button>`;
+  if (!ptActive() || typeof renderInsights !== 'function')                // trainees: no Insights tab at all
+    return diet ? `<nav class="tabs" role="tablist">${tab('log', 'Log workout')}${tab('diet', 'Diet')}</nav>` : '';
   const tg = typeof renderTargets === 'function';
-  return `<nav class="tabs" role="tablist">${tab('log', tg ? 'Log' : 'Log workout')}${tg ? tab('targets', 'Targets') : ''}${tab('insights', 'Insights')}${typeof renderPlan === 'function' ? tab('plan', 'Plan') : ''}</nav>`;
+  return `<nav class="tabs ${diet && tg ? 'five' : ''}" role="tablist">${tab('log', tg ? 'Log' : 'Log workout')}${diet ? tab('diet', 'Diet') : ''}${tg ? tab('targets', 'Targets') : ''}${tab('insights', 'Insights')}${typeof renderPlan === 'function' ? tab('plan', 'Plan') : ''}</nav>`;
+}
+// The diet code only loads for sheets that use it (and in PT mode).
+async function loadDiet() { if (typeof renderDiet !== 'function') await loadScript('diet.js'); }
+async function openDiet() {
+  saveDraft();
+  try { await loadDiet(); } catch (e) { return toast(e.message, 4000); }
+  renderDiet();
 }
 function renderLogger() {
   setChrome({ menu: true, savebar: true });
@@ -1418,7 +1515,8 @@ document.addEventListener('click', async ev => {
       if (t.dataset.tab === 'insights' && ptActive() && typeof renderInsights === 'function') { saveDraft(); renderInsights(); }
       else if (t.dataset.tab === 'plan' && ptActive() && typeof renderPlan === 'function') { saveDraft(); renderPlan(); }
       else if (t.dataset.tab === 'targets' && ptActive() && typeof renderTargets === 'function') { saveDraft(); renderTargets(); }
-      else if (!state.model.days.includes(state.day)) { state.suggestion = suggestDay(); startLogging(state.suggestion.day); }   // plan changed
+      else if (t.dataset.tab === 'diet' && state.model?.hasDiet) openDiet();
+      else if (state.day !== OTHER && !state.model.days.includes(state.day)) { state.suggestion = suggestDay(); startLogging(state.suggestion.day); }   // plan changed
       else renderLogger();
       window.scrollTo({ top: 0 }); break;
     case 'guide': closeModal(); showGuide(t.dataset.reason); break;
@@ -1527,6 +1625,7 @@ $('#saveBtn').addEventListener('click', () => { if (!$('#saveBtn').disabled) sho
 $('#menuBtn').addEventListener('click', showMenu);
 
 /* ============================ demo data ============================ */
+const DAY_MS_DEMO = 864e5;
 const DemoSource = (() => {
   const P = (d, c, e, s, r, rest, n, v) => ['', d, c, e, s, r, rest, n, v];
   const yt = id => id ? 'https://youtube.com/shorts/' + id : '';
@@ -1614,7 +1713,69 @@ const DemoSource = (() => {
     body.push(['', iso(d), 97 + k * 0.4, waist, 56.5 + k * 0.3, 56.5 + k * 0.35, 33 + k * 0.2, 33.2 + k * 0.2, neck, +wt.toFixed(1), hips,
       +(wt / 1.62 ** 2).toFixed(2), +bf.toFixed(4), +(waist / 162).toFixed(2), +(wt * bf).toFixed(2), +(wt * (1 - bf)).toFixed(2), +(waist / hips).toFixed(2)]);
   }
-  const book = { title: 'Demo — Workout Tracker', tabs: { 'Plan': plan, 'Settings': settings, 'Historical Data': history, 'Body Data': body, 'Tracker': [] } };
+  // Diet: Foods (per 100 g), a Diet Plan, and ~2 weeks of Diet Log
+  const foods = [['Food', 'Group', 'kcal /100g', 'Protein /100g', 'Carbs /100g', 'Fat /100g', 'Unit', 'Grams per unit'],
+    ['chicken breast (cooked)', 'protein', 165, 31, 0, 3.6, '', ''], ['egg', 'protein', 143, 12.6, 0.7, 9.5, 'egg', 55],
+    ['tuna (in water)', 'protein', 116, 26, 0, 1, 'can', 120], ['white fish (grilled)', 'protein', 128, 26, 0, 2.7, '', ''],
+    ['lean beef (cooked)', 'protein', 217, 26, 0, 12, '', ''], ['whey protein', 'protein', 390, 78, 8, 5, 'scoop', 30],
+    ['cottage cheese', 'dairy', 98, 11, 3.4, 4.3, '', ''], ['greek yogurt', 'dairy', 59, 10, 3.6, 0.4, 'cup', 170],
+    ['عيش بلدي (baladi bread)', 'carbs', 250, 8.5, 50, 1.2, 'loaf', 90], ['rice (cooked)', 'carbs', 130, 2.7, 28, 0.3, '', ''],
+    ['oats', 'carbs', 389, 17, 66, 7, '', ''], ['potato (boiled)', 'carbs', 87, 1.9, 20, 0.1, '', ''],
+    ['pasta (cooked)', 'carbs', 158, 5.8, 31, 0.9, '', ''], ['foul medames', 'carbs', 110, 7.6, 19.7, 0.4, '', ''],
+    ['banana', 'fruit', 89, 1.1, 23, 0.3, 'banana', 120], ['apple', 'fruit', 52, 0.3, 14, 0.2, 'apple', 180],
+    ['mixed salad', 'veg', 20, 1, 3.5, 0.2, '', ''], ['broccoli', 'veg', 34, 2.8, 7, 0.4, '', ''],
+    ['olive oil', 'fats', 884, 0, 0, 100, 'tbsp', 13], ['peanut butter', 'fats', 588, 25, 20, 50, 'tbsp', 16]];
+  const dStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 15);
+  const DIET = 'Cut – Nov';
+  const dietPlan = [['Kind', 'Meal', 'Item', 'Value', 'Unit', 'kcal', 'Protein', 'Carbs', 'Fat', 'Notes'],
+    ['Plan', '', DIET, iso(dStart)], ['Daily', '', '', '', '', 'max 2200', 'min 160', 'max 220', 'max 70'],
+    ['Cheat', '', '', 1, '2 weeks'], ['Water', '', '', 8, 'glasses'],
+    ['Supplement', '', 'Creatine', '5 g', '', '', '', '', '', 'daily'], ['Supplement', '', 'Whey', '1 scoop', '', '', '', '', '', 'after training'],
+    ['Meal', 'Breakfast', '', '09:00', '', 'max 600', 'min 35', 'max 60', 'max 22'],
+    ['Planned', 'Breakfast', 'egg', 3, 'egg'], ['Planned', 'Breakfast', 'عيش بلدي (baladi bread)', 1, 'loaf'], ['Planned', 'Breakfast', 'cottage cheese', 100, 'g'],
+    ['Allowed', 'Breakfast', 'group: protein'], ['Allowed', 'Breakfast', 'oats'], ['Allowed', 'Breakfast', 'banana'],
+    ['Meal', 'Lunch', '', '14:00', '', 'max 650', 'min 45', 'max 70', 'max 20'],
+    ['Planned', 'Lunch', 'chicken breast (cooked)', 150, 'g'], ['Planned', 'Lunch', 'rice (cooked)', 200, 'g'], ['Planned', 'Lunch', 'mixed salad', 200, 'g'],
+    ['Allowed', 'Lunch', 'group: protein'], ['Allowed', 'Lunch', 'group: carbs'], ['Allowed', 'Lunch', 'group: veg'],
+    ['Meal', 'Pre-workout', '', '17:30', '', 'max 400', 'min 20', 'max 60', 'max 12'],
+    ['Planned', 'Pre-workout', 'banana', 1, 'banana'], ['Planned', 'Pre-workout', 'greek yogurt', 1, 'cup'], ['Planned', 'Pre-workout', 'oats', 30, 'g'],
+    ['Allowed', 'Pre-workout', 'group: fruit'], ['Allowed', 'Pre-workout', 'whey protein'],
+    ['Meal', 'Dinner', '', '21:00', '', 'max 550', 'min 45', 'max 45', 'max 20'],
+    ['Planned', 'Dinner', 'white fish (grilled)', 200, 'g'], ['Planned', 'Dinner', 'potato (boiled)', 150, 'g'], ['Planned', 'Dinner', 'broccoli', 150, 'g'],
+    ['Allowed', 'Dinner', 'group: protein'], ['Allowed', 'Dinner', 'group: veg'], ['Allowed', 'Dinner', 'rice (cooked)']];
+  const F = new Map(foods.slice(1).map(f => [f[0], f]));
+  const line = (date, meal, status, food, amount, unit, notes = '') => {
+    if (!food) return [date, meal, status, '', '', '', '', '', '', '', '', notes, DIET, date + ' 22:00'];
+    const f = F.get(food), g = unit === 'g' ? amount : amount * f[7], k = x => Math.round(x * g / 100 * 10) / 10;
+    return [date, meal, status, food, amount, unit, g, Math.round(f[2] * g / 100), k(f[3]), k(f[4]), k(f[5]), notes, DIET, date + ' 22:00'];
+  };
+  const planned = meal => dietPlan.filter(r => r[0] === 'Planned' && r[1] === meal).map(r => [r[2], r[3], r[4]]);
+  const dietLog = [['Date', 'Meal', 'Status', 'Food', 'Amount', 'Unit', 'Grams', 'kcal', 'Protein', 'Carbs', 'Fat', 'Notes', 'Diet Plan', 'Saved at']];
+  for (let d = new Date(dStart); d < new Date(now.getFullYear(), now.getMonth(), now.getDate()); d.setDate(d.getDate() + 1)) {
+    const ds = iso(d), back = Math.round((now - d) / DAY_MS_DEMO);
+    for (const meal of ['Breakfast', 'Lunch', 'Pre-workout', 'Dinner']) {
+      const x = rnd();
+      if (meal === 'Dinner' && (back === 11 || back === 3)) { dietLog.push(line(ds, meal, 'cheat', '', '', '', back === 3 ? 'koshari large + rice pudding' : 'pizza, 2 slices')); continue; }
+      if (x < 0.07) { dietLog.push(line(ds, meal, 'skipped', '')); continue; }
+      if (x < 0.30) {      // adjusted: bigger carb portion or a swap
+        planned(meal).forEach(([f, a, u]) => {
+          const g = F.get(f)[1];
+          if (g === 'carbs' && u === 'g') dietLog.push(line(ds, meal, 'adjusted', f, Math.round(a * 1.35 / 10) * 10, u));
+          else if (f === 'white fish (grilled)') dietLog.push(line(ds, meal, 'adjusted', 'chicken breast (cooked)', 170, 'g'));
+          else dietLog.push(line(ds, meal, 'adjusted', f, a, u));
+        });
+        continue;
+      }
+      planned(meal).forEach(([f, a, u]) => dietLog.push(line(ds, meal, 'planned', f, a, u)));
+    }
+    const sup = n => [ds, 'Supplement', 'taken', n, '', '', '', '', '', '', '', '', DIET, ds + ' 22:00'];
+    if (rnd() < 0.9) dietLog.push(sup('Creatine'));
+    if (d.getDay() % 2 === 1) dietLog.push(sup('Whey'));
+    dietLog.push([ds, 'Water', 'water', '', 4 + Math.round(rnd() * 4), 'glasses', '', '', '', '', '', '', DIET, ds + ' 22:00']);
+  }
+  const book = { title: 'Demo — Workout Tracker', tabs: { 'Plan': plan, 'Settings': settings, 'Historical Data': history, 'Body Data': body, 'Tracker': [],
+    'Foods': foods, 'Diet Plan': dietPlan, 'Diet Log': dietLog } };
+  window.__demoBook = book;   // for tests and the "rows written" view
   const ids = { 'Plan': 1, 'Settings': 2, 'Historical Data': 3, 'Body Data': 4, 'Tracker': 0 };
   const tabOf = range => range.match(/^'((?:[^']|'')+)'!/)[1].replace(/''/g, "'");
   return {
