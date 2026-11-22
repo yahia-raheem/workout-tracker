@@ -142,7 +142,7 @@ function renderDietIntro() {
   const nFoods = dietModel().foods.list.length;
   $('#app').innerHTML = `${tabsHTML('plan')}${planSegHTML('diet')}
     <section class="panel"><h2>No diet plan yet</h2>
-      <p class="muted">A diet plan has meals with times and limits, the foods planned for each meal, and the foods the trainee may swap in. Once it's saved, the trainee gets a <b>Diet</b> tab.</p>
+      <p class="muted">A diet plan has meals with limits, the foods planned for each meal, and the foods the trainee may swap in. Once it's saved, the trainee gets a <b>Diet</b> tab.</p>
       ${nFoods ? '' : `<div class="d-warn" style="margin-bottom:12px">Add some foods first (the <b>Foods</b> tab above); meals are built from them.</div>`}
       <div style="display:grid;gap:10px"><button class="btn block" data-act="dp-new" data-from="empty">Create a diet plan</button>
       <button class="btn ghost block" data-act="dp-import">⤒ Import a diet file</button></div>
@@ -188,7 +188,7 @@ function dietMealHTML(m, i, D) {
   if (!open) {
     const t = sumNutrition(m.planned, D.foods);
     return `<section class="dp"><button class="d-food" data-act="dp-meal-open" data-i="${i}" style="padding:0">
-      <span class="n"><b>Meal ${i + 1} · ${esc(m.name || 'Unnamed')}</b><span>${esc(m.time || 'no time')} · ${plural(m.planned.length, 'planned food')} · ${fmtG(t.kcal)} kcal</span></span><span class="text-btn" style="padding:0">Open</span></button></section>`;
+      <span class="n"><b>Meal ${i + 1} · ${esc(m.name || 'Unnamed')}</b><span>${plural(m.planned.length, 'planned food')} · ${fmtG(t.kcal)} kcal</span></span><span class="text-btn" style="padding:0">Open</span></button></section>`;
   }
   const tot = sumNutrition(m.planned, D.foods);
   return `<section class="dp" style="border-color:#3b4250">
@@ -196,8 +196,7 @@ function dietMealHTML(m, i, D) {
       <button class="icon-btn small" data-act="dp-meal-move" data-i="${i}" data-d="-1" ${i ? '' : 'disabled'} aria-label="Move up">↑</button>
       <button class="icon-btn small" data-act="dp-meal-move" data-i="${i}" data-d="1" ${i < P.meals.length - 1 ? '' : 'disabled'} aria-label="Move down">↓</button>
       <button class="icon-btn small" data-act="dp-meal-rm" data-i="${i}" aria-label="Delete meal">✕</button></div>
-    <div style="display:grid;grid-template-columns:1fr 128px;gap:8px"><div><label class="d-lbl">Name</label><input class="d-inp" data-dpf="meal-name" data-i="${i}" value="${esc(m.name)}" placeholder="e.g. Breakfast" dir="auto"></div>
-      <div><label class="d-lbl">Time</label><input class="d-inp" type="time" data-dpf="meal-time" data-i="${i}" value="${esc(m.time)}"></div></div>
+    <label class="d-lbl">Name</label><input class="d-inp" data-dpf="meal-name" data-i="${i}" value="${esc(m.name)}" placeholder="e.g. Breakfast" dir="auto">
     <span class="d-lbl">Limits for this meal</span>${limitInputs('meal', m.limits, i)}
     <span class="d-lbl">Planned (“As planned”)</span>
     ${m.planned.map((it, k) => { const f = D.foods.byName.get(norm(it.food)), units = f?.gpu ? ['g', f.unit] : ['g'];
@@ -243,7 +242,7 @@ function planToRows(P) {
   if (P.water) rows.push(['Water', '', '', Number(P.water), 'glasses']);
   P.supps.forEach(s => rows.push(['Supplement', '', s.name, s.amount, '', '', '', '', '', s.when]));
   P.meals.forEach(m => {
-    rows.push(['Meal', m.name, '', m.time, '', L(m.limits.kcal), L(m.limits.p), L(m.limits.c), L(m.limits.f)]);
+    rows.push(['Meal', m.name, '', '', '', L(m.limits.kcal), L(m.limits.p), L(m.limits.c), L(m.limits.f)]);
     m.planned.forEach(it => rows.push(['Planned', m.name, it.food, nnum(it.amount) ?? '', it.unit || 'g']));
     m.allowed.forEach(a => rows.push(['Allowed', m.name, a]));
   });
@@ -374,7 +373,7 @@ function drawDietInsights() {
   const logged = perDay.filter(d => d.n);
   const avg = k => logged.length ? logged.reduce((t, d) => t + d[k], 0) / logged.length : 0;
   const cheats = cheatList(L), overN = cheats.filter(c => cheatOver(L, P, c.ds, c.meal)).length;
-  const expected = days.length * P.meals.length, notLogged = Math.max(0, expected - entries.length - P.meals.filter(m => !L.byDay.get(isoDay(today))?.has(norm(m.name)) && (mealTimeToday(m) || 0) > new Date()).length);
+  const expected = days.length * P.meals.length, notLogged = Math.max(0, expected - entries.length - P.meals.filter(m => !L.byDay.get(isoDay(today))?.has(norm(m.name))).length);   // today isn't over yet
   const lim = P.daily;
   const tileLim = (k, v) => lim[k] ? `${({ max: 'max', min: 'min', target: 'target' })[lim[k].mode]} ${fmtG(lim[k].val)}${lim[k].mode === 'min' && v < lim[k].val ? ` · ${fmtG(lim[k].val - v)} short` : lim[k].mode === 'max' && v > lim[k].val ? ` · ${fmtG(v - lim[k].val)} over` : ''}` : 'no daily target';
   // per meal
@@ -435,7 +434,7 @@ document.addEventListener('click', async ev => {
     case 'df-edit': { const f = dietModel().foods.byName.get(norm(t.dataset.name)); openModal(foodFormHTML(f)); foodCheck(); break; }
     case 'df-save': saveFood(t.dataset.orig); break;
     case 'df-del': deleteFood(t.dataset.name); break;
-    case 'dp-new': DPT.draft = { mode: 'new', plan: newDraft() }; DPT.draft.plan.meals.push({ name: 'Breakfast', time: '09:00', limits: blankLimits(), planned: [], allowed: [] }); DPT.openMeal = 0; saveDietDraft(); renderDietEditor(); break;
+    case 'dp-new': DPT.draft = { mode: 'new', plan: newDraft() }; DPT.draft.plan.meals.push({ name: 'Breakfast', limits: blankLimits(), planned: [], allowed: [] }); DPT.openMeal = 0; saveDietDraft(); renderDietEditor(); break;
     case 'dp-newask': openModal(`<h3>New diet plan</h3><p class="muted">Start from a copy of “${esc(dietModel().plan.name)}” or from scratch. Nothing changes until you create it; you'll be asked to confirm, because creating it deletes the current plan's logged meals.</p>
       <div style="display:grid;gap:10px"><button class="btn block" data-act="dp-new-copy">Copy of the current plan</button><button class="btn ghost block" data-act="dp-new">Empty plan</button><button class="btn ghost block" data-act="close">Cancel</button></div>`); break;
     case 'dp-new-copy': closeModal(); DPT.draft = { mode: 'new', plan: newDraft({ ...dietModel().plan, name: '', start: '' }) }; DPT.openMeal = 0; saveDietDraft(); renderDietEditor(); window.scrollTo({ top: 0 }); break;
@@ -449,7 +448,7 @@ document.addEventListener('click', async ev => {
       <div class="d-row2"><div><label class="d-lbl" for="dsA">Amount</label><input class="d-inp" id="dsA" placeholder="e.g. 5 g"></div><div><label class="d-lbl" for="dsW">When</label><input class="d-inp" id="dsW" placeholder="e.g. daily"></div></div>
       <div style="display:flex;gap:8px;margin-top:12px"><button class="btn" style="flex:1" data-act="dp-supp-go">Add</button><button class="btn ghost" data-act="close">Cancel</button></div>`); $('#dsN').focus(); break;
     case 'dp-supp-go': { const n = str($('#dsN').value); if (!n) break; P.supps.push({ name: n, amount: str($('#dsA').value), when: str($('#dsW').value) }); closeModal(); saveDietDraft(); renderDietEditor(); break; }
-    case 'dp-meal-add': P.meals.push({ name: '', time: '', limits: blankLimits(), planned: [], allowed: [] }); DPT.openMeal = P.meals.length - 1; saveDietDraft(); renderDietEditor(); break;
+    case 'dp-meal-add': P.meals.push({ name: '', limits: blankLimits(), planned: [], allowed: [] }); DPT.openMeal = P.meals.length - 1; saveDietDraft(); renderDietEditor(); break;
     case 'dp-meal-open': DPT.openMeal = i; renderDietEditor(); document.querySelectorAll('.dp')[i + 1]?.scrollIntoView({ block: 'start' }); break;
     case 'dp-meal-move': { const j = i + Number(t.dataset.d); [P.meals[i], P.meals[j]] = [P.meals[j], P.meals[i]]; DPT.openMeal = j; saveDietDraft(); renderDietEditor(); break; }
     case 'dp-meal-rm': if (P.meals[i].planned.length && !confirmOnce(t, 'Tap again to delete')) break; P.meals.splice(i, 1); DPT.openMeal = -1; saveDietDraft(); renderDietEditor(); break;
@@ -482,9 +481,8 @@ document.addEventListener('input', ev => {
   else if (f === 'cheat-w') P.cheat.weeks = Math.max(1, parseInt(t.value) || 1);
   else if (f === 'water') P.water = Math.max(0, parseInt(t.value) || 0);
   else if (f.startsWith('daily-')) readDraftLimits('daily', P.daily, '');
-  else if (f.startsWith('meal-') && f !== 'meal-name' && f !== 'meal-time') readDraftLimits('meal', P.meals[i].limits, i);
+  else if (f.startsWith('meal-') && f !== 'meal-name') readDraftLimits('meal', P.meals[i].limits, i);
   else if (f === 'meal-name') P.meals[i].name = t.value;
-  else if (f === 'meal-time') P.meals[i].time = t.value;
   else if (f === 'it-amt') P.meals[i].planned[k].amount = t.value.replace(',', '.');
   else if (f === 'it-unit') { P.meals[i].planned[k].unit = t.value; saveDietDraft(); return renderDietEditor(); }
   saveDietDraft();

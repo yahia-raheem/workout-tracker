@@ -8,7 +8,7 @@
    - Diet Plan:  Kind | Meal | Item | Value | Unit | kcal | Protein | Carbs | Fat | Notes
                  Kind = Plan (Item = name, Value = start date) · Daily (limits) · Cheat (Value = N, Unit = "2 weeks")
                         · Water (Value = glasses) · Supplement (Item, Value = amount, Notes = when)
-                        · Meal (Meal, Value = time, limits) · Planned (Meal, Item = food, Value = amount, Unit = g / unit)
+                        · Meal (Meal, limits) · Planned (Meal, Item = food, Value = amount, Unit = g / unit)
                         · Allowed (Meal, Item = food or "group: protein")
                  Limits are written "max 550", "min 40" or "target 2200" (±10%).
    - Diet Log:   Date | Meal | Status | Food | Amount | Unit | Grams | kcal | Protein | Carbs | Fat | Notes | Diet Plan | Saved at
@@ -65,15 +65,15 @@ function parseDietPlan(rows) {
   const P = { name: '', start: '', daily: {}, cheat: { n: 0, weeks: 0 }, water: 0, supps: [], meals: [] };
   if (!rows || !rows.length) return P;
   const lims = r => ({ kcal: parseLimit(r[5], 'kcal'), p: parseLimit(r[6], 'p'), c: parseLimit(r[7], 'c'), f: parseLimit(r[8], 'f') });
-  const meal = name => { let m = P.meals.find(x => norm(x.name) === norm(name)); if (!m) { m = { name: str(name), time: '', limits: {}, planned: [], allowed: [] }; P.meals.push(m); } return m; };
+  const meal = name => { let m = P.meals.find(x => norm(x.name) === norm(name)); if (!m) { m = { name: str(name), limits: {}, planned: [], allowed: [] }; P.meals.push(m); } return m; };
   for (const r of rows.slice(1)) {
     const kind = norm(r[0]);
-    if (kind === 'plan') { P.name = str(r[2]); P.start = str(r[3]); }
+    if (kind === 'plan') { P.name = str(r[2]); const d = dayOf(r[3]); P.start = d ? isoDay(d) : ''; }
     else if (kind === 'daily') P.daily = lims(r);
     else if (kind === 'cheat') P.cheat = { n: Math.max(0, parseInt(r[3]) || 0), weeks: Math.max(0, parseInt(r[4]) || 0) };
     else if (kind === 'water') P.water = Math.max(0, parseInt(r[3]) || 0);
     else if (kind === 'supplement' && str(r[2])) P.supps.push({ name: str(r[2]), amount: str(r[3]), when: str(r[9]) });
-    else if (kind === 'meal' && str(r[1])) { const m = meal(r[1]); m.time = str(r[3]); m.limits = lims(r); }
+    else if (kind === 'meal' && str(r[1])) { const m = meal(r[1]); m.limits = lims(r); }
     else if (kind === 'planned' && str(r[1]) && str(r[2])) meal(r[1]).planned.push({ food: str(r[2]), amount: nnum(r[3]) ?? '', unit: str(r[4]) || 'g' });
     else if (kind === 'allowed' && str(r[1]) && str(r[2])) meal(r[1]).allowed.push(str(r[2]));
   }
@@ -280,17 +280,15 @@ async function renderDiet() {
   if (DT.open === null) DT.open = defaultOpenMeal();
   drawDiet();
 }
-function mealTimeToday(m) { const t = str(m.time).match(/^(\d{1,2})[:.](\d{2})/); if (!t) return null; const d = new Date(); d.setHours(+t[1], +t[2], 0, 0); return d; }
+// Today, the first meal not logged yet is open, ready to log.
 function defaultOpenMeal() {
   const { plan } = dietModel(), today = isoDay(new Date());
   if (DT.date !== today) return '';
-  const logged = DT.L.byDay.get(today) || new Map(), now = new Date();
-  const due = plan.meals.filter(m => !logged.has(norm(m.name)) && (mealTimeToday(m) || 0) <= addMinutes(now, 60));
-  const m = due[due.length - 1] || plan.meals.find(x => !logged.has(norm(x.name)));
+  const logged = DT.L.byDay.get(today) || new Map();
+  const m = plan.meals.find(x => !logged.has(norm(x.name)));
   if (m) startEdit(m);
   return m ? m.name : '';
 }
-const addMinutes = (d, n) => new Date(d.getTime() + n * 60000);
 function startEdit(meal) {
   const e = DT.L.byDay.get(DT.date)?.get(norm(meal.name));
   const copy = items => items.map(it => ({ food: it.food, amount: it.amount, unit: it.unit || 'g' }));
@@ -340,17 +338,12 @@ function mealCardHTML(m) {
     chip = STATUS_CHIP[e.status] || ['eat', e.status];
     if (e.status === 'cheat') {
       const over = cheatOver(DT.L, D.plan, DT.date, m.name);
-      sub = `${esc(m.time)} · “${esc(e.notes || 'cheat meal')}”${over ? ' · <span class="d-over">over allowance</span>' : ''}`;
-    } else if (e.status === 'skipped') sub = `${esc(m.time)} · skipped`;
-    else { const t = sumNutrition(e.items); sub = `${esc(m.time)} · ${fmtG(t.kcal)} kcal · P ${fmtG(t.p)} · C ${fmtG(t.c)} · F ${fmtG(t.f)}`; }
+      sub = `“${esc(e.notes || 'cheat meal')}”${over ? ' · <span class="d-over">over allowance</span>' : ''}`;
+    } else if (e.status === 'skipped') sub = 'skipped';
+    else { const t = sumNutrition(e.items); sub = `${fmtG(t.kcal)} kcal · P ${fmtG(t.p)} · C ${fmtG(t.c)} · F ${fmtG(t.f)}`; }
   } else {
-    // today: the latest meal that's due is "Now", earlier unlogged ones "Not logged", the rest "Later"
-    const logged = DT.L.byDay.get(DT.date) || new Map();
-    const dueNow = DT.date === today ? D.plan.meals.filter(x => !logged.has(norm(x.name)) && (mealTimeToday(x) || 0) <= new Date()).pop() : null;
-    const due = DT.date < today || (mealTimeToday(m) || 0) <= new Date();
-    chip = ['todo', DT.date < today ? 'Not logged' : dueNow === m ? 'Now' : due ? 'Not logged' : 'Later'];
-    const lp = limitPillsText(m.limits);
-    sub = `${esc(m.time)}${lp ? ' · ' + lp : ''}`;
+    chip = ['todo', 'Not logged'];
+    sub = esc(limitPillsText(m.limits) || 'no limits');
   }
   return `<section class="d-meal ${open ? 'open' : ''}" id="meal-${esc(norm(m.name).replace(/\W+/g, '-'))}">
     <button class="hd" data-act="d-meal" data-meal="${esc(m.name)}" aria-expanded="${open}">
@@ -449,7 +442,7 @@ async function saveMeal() {
     try { navigator.vibrate?.(40); } catch {}
     DT.busy = false; DT.open = '';
     const next = D.plan.meals.find(x => !DT.L.byDay.get(DT.date)?.has(norm(x.name)) && D.plan.meals.indexOf(x) > D.plan.meals.indexOf(m));
-    if (next && DT.date === isoDay(new Date()) && (mealTimeToday(next) || 0) <= addMinutes(new Date(), 60)) { DT.open = next.name; startEdit(next); }
+    if (next) { DT.open = next.name; startEdit(next); }
     drawDiet();
   } catch (e) {
     DT.busy = false; redrawOpenMeal();

@@ -162,12 +162,12 @@ Three new tabs in the sheet, created by the app the first time they're needed:
 | Tab | Columns |
 |---|---|
 | **Foods** | `Food, Group, kcal /100g, Protein /100g, Carbs /100g, Fat /100g, Unit, Grams per unit` |
-| **Diet Plan** | `Kind, Meal, Item, Value, Unit, kcal, Protein, Carbs, Fat, Notes`, one row per setting: `Plan` (name, start date), `Daily` (limits), `Cheat` (N, "X weeks"), `Water` (glasses), `Supplement`, `Meal` (time, limits), `Planned` (food, amount, unit), `Allowed` (food or `group: protein`). Limits are written `max 550`, `min 40` or `target 2200` (±10%). |
+| **Diet Plan** | `Kind, Meal, Item, Value, Unit, kcal, Protein, Carbs, Fat, Notes`, one row per setting: `Plan` (name, start date), `Daily` (limits), `Cheat` (N, "X weeks"), `Water` (glasses), `Supplement`, `Meal` (limits), `Planned` (food, amount, unit), `Allowed` (food or `group: protein`). Limits are written `max 550`, `min 40` or `target 2200` (±10%). |
 | **Diet Log** | `Date, Meal, Status, Food, Amount, Unit, Grams, kcal, Protein, Carbs, Fat, Notes, Diet Plan, Saved at`. Status is `planned`, `adjusted`, `skipped`, `cheat`, `taken` (Meal = Supplement) or `water` (Meal = Water). |
 
 **PT (Plan tab → Diet plan / Foods):**
 - **Foods**: values per 100 g with an optional unit (e.g. 1 egg = 55 g). The form checks protein × 4 + carbs × 4 + fat × 9 against the calories. The group is used for swaps. Foods used in the plan can't be deleted; renaming a food updates the plan.
-- **Diet planner**: plan name, daily targets (≤ max, ≥ min, ≈ target ±10%), cheat meals (N in any X weeks, rolling), water, supplements, and meals with a time, limits, planned foods ("As planned") and extra allowed foods or whole groups.
+- **Diet planner**: plan name, daily targets (≤ max, ≥ min, ≈ target ±10%), cheat meals (N in any X weeks, rolling), water, supplements, and meals with limits, planned foods ("As planned") and extra allowed foods or whole groups.
 - **New diet plan…** (copy or empty) asks for confirmation and then **deletes the Diet Log** (the old plan's meals, supplements and water). Foods are kept. Editing the current plan keeps the log.
 - **Diet files**: export the plan with the foods it uses; importing adds missing foods and opens the plan as a new plan.
 - **Insights → Diet**: current plan only: meals on target, average calories and protein, cheat meals vs allowance, calories and protein per day, a by-meal table (most frequent miss), supplements and water, and body weight since the plan started (from Body Data).
