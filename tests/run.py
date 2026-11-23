@@ -135,6 +135,15 @@ def other_cardio_session(E):
         assert last[2] == 'Other' and last[3] == 'cardio' and str(last[7]) == '30' and last[8] == '' and last[10] == '2.7 km, incline 8', last
         pg.click('[data-act=close]'); assert pg.evaluate('state.day') == nxt
 
+@test
+def insights_next_up_ignores_other(E):
+    with E.page('?demo&pt') as pg:
+        pg.wait_for_selector('.card'); nxt = pg.evaluate('nextPlanDay().day')
+        pg.click('[data-act=other]'); pg.wait_for_selector('#ahCat'); pg.select_option('#ahEx', label='bike'); pg.click('[data-act=adhoc-add]')
+        pg.fill('input[data-f=reps][data-i="0"][data-j="0"]', '20'); pg.click('#saveBtn'); pg.click('[data-act=confirm-save]'); pg.wait_for_selector('.result.ok'); pg.click('[data-act=close]')
+        pg.click('[data-act=tab][data-tab=insights]'); pg.wait_for_selector('.nextup b', timeout=10000)
+        assert pg.inner_text('.nextup b') == nxt, (pg.inner_text('.nextup b'), nxt)
+
 # ------------------------------------------------------------------ PT
 @test
 def pt_unlock(E):

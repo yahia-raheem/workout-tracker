@@ -37,9 +37,8 @@ function planProgress() {
     const completion = mine.length ? mine.reduce((t, s) => t + Math.min(1, s.sets.filter(x => names.has(x.ex)).length / Math.max(1, plannedSets)), 0) / mine.length : NaN;
     return { day, count: mine.length, last: mine.length ? mine[mine.length - 1].date : null, completion };
   });
-  const lastS = ss[ss.length - 1];
-  const idx = lastS ? m.days.findIndex(d => norm(d) === norm(lastS.day)) : -1;
-  const next = m.days.length ? m.days[(idx + 1) % m.days.length] : null;
+  // Same rule as the logging screen (skips Other sessions and other plans' days)
+  const next = m.days.length ? nextPlanDay(m).day : null;
   const start = ss.length ? ss[0].date : null;
   const weeks = start ? Math.max(1, (today() - start) / (7 * DAY_MS)) : NaN;
   return { sessions: ss, days, next, start, weeks, perWeek: ss.length / weeks, rounds: Math.min(...days.map(d => d.count)) };
