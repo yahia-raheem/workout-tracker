@@ -51,6 +51,10 @@ function renderFoods() {
         <span class="n"><b dir="auto">${esc(f.name)}</b><span>${macroPer100(f)} ${f.gpu ? `· 1 ${esc(f.unit)} = ${r1(f.gpu)} g` : 'per 100 g'}</span></span><span class="chip">${esc(f.group || '—')}</span></button>`).join('')
       : `<p class="muted" style="margin:12px 0">${F.list.length ? 'No foods match.' : 'No foods yet. Add the foods your trainees may eat; values are per 100 g, as on nutrition labels.'}</p>`}</div>
     <button class="add-ex" data-act="df-edit" data-name="">+ Add food</button>
+    <section class="dp"><div class="d-pills" style="margin:0">
+      <button data-act="df-export" ${F.list.length ? '' : 'disabled'}>⤓ Export all foods</button><button data-act="df-import">⤒ Import foods</button>
+    </div><p class="small muted" style="margin:6px 0 0">Import adds new foods and skips ones this sheet already has. A diet-plan file can be imported here too (its foods only).</p>
+    <input type="file" id="dfFile" accept=".json,application/json" hidden></section>
     <p class="small muted" style="line-height:1.5">Foods are shared by every diet plan in this sheet and are never deleted when a new diet plan is created. The group is used for swaps: a trainee can swap a food for another of the same group if the meal allows it.</p>`;
   window.scrollTo({ top: y });
   $('#dfQ').addEventListener('input', ev => { DPT.fq = ev.target.value; const pos = ev.target.selectionStart; renderFoods(); const el = $('#dfQ'); el.focus(); el.setSelectionRange(pos, pos); });
@@ -324,25 +328,84 @@ function exportDiet() {
   const slug = (P.name || 'diet').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/gi, '-').replace(/^-+|-+$/g, '') || 'diet';
   shareJSON({ app: 'workout-log', kind: 'diet', version: 1, exportedAt: new Date().toISOString(), name: P.name, plan, foods }, `${slug}.diet-plan.json`, P.name);
 }
-// Importing adds the file's foods that this sheet doesn't have yet (existing foods are kept as they are)
-// and opens the plan as a new diet plan.
-async function importDiet(file) {
-  let data;
-  try { data = JSON.parse(await file.text()); if (data.kind !== 'diet' || !data.plan || !Array.isArray(data.plan.meals)) throw 0; }
-  catch { return toast(`“${file.name}” isn't a Workout Log diet file.`, 4000); }
-  const have = dietModel().foods.list, add = (data.foods || []).filter(f => f && str(f.name) && !have.some(h => norm(h.name) === norm(f.name)));
+/* --------------------------- food files --------------------------- */
+const cleanFood = f => ({ name: str(f.name), group: str(f.group).toLowerCase(), kcal: +f.kcal || 0, p: +f.p || 0, c: +f.c || 0, f: +f.f || 0, unit: str(f.unit), gpu: +f.gpu || 0 });
+const sameFood = (a, b) => ['group', 'kcal', 'p', 'c', 'f', 'unit', 'gpu'].every(k => String(a[k] ?? '') === String(b[k] ?? '') || (k !== 'group' && k !== 'unit' && Number(a[k] || 0) === Number(b[k] || 0)));
+function exportFoods() {
+  const foods = dietModel().foods.list.map(({ row, ...f }) => f);
+  const slug = (state.sheet?.name || 'foods').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/gi, '-').replace(/^-+|-+$/g, '') || 'sheet';
+  shareJSON({ app: 'workout-log', kind: 'foods', version: 1, exportedAt: new Date().toISOString(), foods }, `foods-${slug}.json`, 'Foods');
+}
+async function readJSONFile(file, kinds) {
+  try { const d = JSON.parse(await file.text()); if (d.app === 'workout-log' && kinds.includes(d.kind) && Array.isArray(d.foods)) return d; } catch {}
+  toast(`“${file.name}” isn't a Workout Log ${kinds.includes('diet') && kinds.length === 1 ? 'diet' : 'foods'} file.`, 4000);
+  return null;
+}
+// Compare a file's foods with the sheet: new ones, ones that exist with the same values, ones that differ.
+function foodDiff(fileFoods) {
+  const have = dietModel().foods.list, out = { add: [], same: [], differ: [] };
+  const seen = new Set();
+  for (const raw of fileFoods) {
+    const f = cleanFood(raw || {}); if (!f.name || seen.has(norm(f.name))) continue; seen.add(norm(f.name));
+    const h = have.find(x => norm(x.name) === norm(f.name));
+    if (!h) out.add.push(f); else if (sameFood(h, f)) out.same.push(f); else out.differ.push({ f, h });
+  }
+  return out;
+}
+const nameList = (xs, n = 6) => esc(xs.slice(0, n).join(', ')) + (xs.length > n ? ` and ${xs.length - n} more` : '');
+// Foods file (or a diet file's foods): add new ones, skip the ones this sheet already has.
+async function importFoods(file) {
+  const data = await readJSONFile(file, ['foods', 'diet']); if (!data) return;
+  const d = foodDiff(data.foods), skip = [...d.same, ...d.differ.map(x => x.f)];
+  if (!d.add.length) return toast(`Nothing to add: all ${plural(skip.length, 'food')} in the file already exist.`, 4000);
+  DPT.pendingFoods = d.add;
+  openModal(`<h3>Import foods?</h3>
+    <p><b>${plural(d.add.length, 'new food')}</b> will be added: <span class="muted">${nameList(d.add.map(f => f.name))}</span>.</p>
+    ${skip.length ? `<p class="small muted">${plural(skip.length, 'food')} already in this sheet will be skipped and keep their current values${d.differ.length ? ` (${d.differ.length} of them ${d.differ.length === 1 ? 'has' : 'have'} different values in the file)` : ''}.</p>` : ''}
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn" style="flex:1" data-act="df-import-go">Add ${plural(d.add.length, 'food')}</button><button class="btn ghost" data-act="close">Cancel</button></div>`);
+}
+async function writeImportedFoods() {
+  const add = DPT.pendingFoods || []; DPT.pendingFoods = null;
   try {
-    if (add.length) {
+    await ensureToken();
+    const { values } = await writeTab('Foods', FOODS_HEAD, foodRows([...dietModel().foods.list, ...add]));
+    state.model.dietRaw.foods = values; state.model.dietRaw._parsed = null;
+    closeModal(); toast(`${plural(add.length, 'food')} added`); renderFoods();
+  } catch (e) { toast('Foods not added: ' + authMsg(e), 5000); }
+}
+// Diet file: its foods win. Missing foods are added and existing ones take the file's values
+// (the plan was built around them). Logged meals keep the values they were saved with.
+async function importDiet(file) {
+  const data = await readJSONFile(file, ['diet']); if (!data) return;
+  if (!data.plan || !Array.isArray(data.plan.meals)) return toast(`“${file.name}” has no diet plan in it.`, 4000);
+  const d = foodDiff(data.foods);
+  DPT.pendingDiet = { data, d };
+  if (!d.add.length && !d.differ.length) return applyImportedDiet();
+  const changes = d.differ.map(x => `<li dir="auto">${esc(x.f.name)}: ${fmtG(x.h.kcal)} → <b>${fmtG(x.f.kcal)} kcal</b> · P ${r1(x.h.p)} → <b>${r1(x.f.p)}</b> · C ${r1(x.h.c)} → <b>${r1(x.f.c)}</b> · F ${r1(x.h.f)} → <b>${r1(x.f.f)}</b>${x.h.unit !== x.f.unit || Number(x.h.gpu) !== Number(x.f.gpu) ? ` · unit ${esc(x.f.unit ? `${x.f.unit} = ${x.f.gpu} g` : 'none')}` : ''}</li>`).join('');
+  openModal(`<h3>Import “${esc(data.name || data.plan.name || 'diet plan')}”?</h3>
+    <p class="small muted" style="margin-top:-6px">The plan's food values replace the ones in this sheet, so the plan works out as its author built it.</p>
+    ${d.add.length ? `<p><b>${plural(d.add.length, 'new food')}</b> will be added: <span class="muted">${nameList(d.add.map(f => f.name))}</span>.</p>` : ''}
+    ${d.differ.length ? `<p><b>${plural(d.differ.length, 'food')}</b> will be updated with the plan's values:</p><ul class="small" style="margin:0 0 8px;padding-left:18px;line-height:1.6;max-height:30vh;overflow:auto">${changes}</ul>` : ''}
+    <p class="small muted">Meals already logged keep the values they were saved with. The plan opens as a new diet plan; nothing else changes until you create it.</p>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn" style="flex:1" data-act="dp-import-go">Update foods &amp; open plan</button><button class="btn ghost" data-act="close">Cancel</button></div>`);
+}
+async function applyImportedDiet() {
+  const { data, d } = DPT.pendingDiet || {}; DPT.pendingDiet = null; if (!data) return;
+  if (d.add.length || d.differ.length) {
+    try {
       await ensureToken();
-      const list = [...have, ...add.map(f => ({ name: str(f.name), group: str(f.group).toLowerCase(), kcal: +f.kcal || 0, p: +f.p || 0, c: +f.c || 0, f: +f.f || 0, unit: str(f.unit), gpu: +f.gpu || 0 }))];
-      const { values } = await writeTab('Foods', FOODS_HEAD, foodRows(list));
+      const upd = new Map(d.differ.map(x => [norm(x.f.name), x.f]));
+      const list = dietModel().foods.list.map(f => upd.has(norm(f.name)) ? { ...upd.get(norm(f.name)), name: f.name } : f);
+      const { values } = await writeTab('Foods', FOODS_HEAD, foodRows([...list, ...d.add]));
       state.model.dietRaw.foods = values; state.model.dietRaw._parsed = null;
-    }
-  } catch (e) { return toast('Foods not added: ' + authMsg(e), 5000); }
+    } catch (e) { return toast('Foods not updated: ' + authMsg(e), 5000); }
+  }
+  closeModal();
   DPT.draft = { mode: 'new', plan: newDraft({ ...data.plan, name: str(data.name || data.plan.name), start: '' }) };
   DPT.openMeal = 0; DPT.resumed = false; saveDietDraft();
   renderDietEditor();
-  toast(`${plural(add.length, 'food')} added to Foods. Check the plan, then create it.`, 4500);
+  const bits = [d.add.length && `${plural(d.add.length, 'food')} added`, d.differ.length && `${plural(d.differ.length, 'food')} updated`].filter(Boolean);
+  toast(`${bits.length ? bits.join(', ') + '. ' : ''}Check the plan, then create it.`, 4500);
 }
 
 /* ============================ Diet insights ============================ */
@@ -434,6 +497,10 @@ document.addEventListener('click', async ev => {
     case 'df-edit': { const f = dietModel().foods.byName.get(norm(t.dataset.name)); openModal(foodFormHTML(f)); foodCheck(); break; }
     case 'df-save': saveFood(t.dataset.orig); break;
     case 'df-del': deleteFood(t.dataset.name); break;
+    case 'df-export': exportFoods(); break;
+    case 'df-import': $('#dfFile')?.click(); break;
+    case 'df-import-go': writeImportedFoods(); break;
+    case 'dp-import-go': applyImportedDiet(); break;
     case 'dp-new': DPT.draft = { mode: 'new', plan: newDraft() }; DPT.draft.plan.meals.push({ name: 'Breakfast', limits: blankLimits(), planned: [], allowed: [] }); DPT.openMeal = 0; saveDietDraft(); renderDietEditor(); break;
     case 'dp-newask': openModal(`<h3>New diet plan</h3><p class="muted">Start from a copy of “${esc(dietModel().plan.name)}” or from scratch. Nothing changes until you create it; you'll be asked to confirm, because creating it deletes the current plan's logged meals.</p>
       <div style="display:grid;gap:10px"><button class="btn block" data-act="dp-new-copy">Copy of the current plan</button><button class="btn ghost block" data-act="dp-new">Empty plan</button><button class="btn ghost block" data-act="close">Cancel</button></div>`); break;
@@ -492,4 +559,7 @@ document.addEventListener('input', ev => {
     const tot = document.getElementById(`dpTot-${i}`); if (tot) tot.innerHTML = totalsHTML(sumNutrition(m.planned, D.foods), m.limits, 'Planned total: ');
   }
 });
-document.addEventListener('change', ev => { if (ev.target.id === 'dpFile' && ev.target.files[0]) { importDiet(ev.target.files[0]); ev.target.value = ''; } });
+document.addEventListener('change', ev => {
+  if (ev.target.id === 'dpFile' && ev.target.files[0]) { importDiet(ev.target.files[0]); ev.target.value = ''; }
+  if (ev.target.id === 'dfFile' && ev.target.files[0]) { importFoods(ev.target.files[0]); ev.target.value = ''; }
+});
