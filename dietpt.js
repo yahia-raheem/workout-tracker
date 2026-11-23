@@ -309,32 +309,20 @@ async function saveDiet() {
 }
 
 /* ------------------------------ diet files ------------------------------ */
-async function shareJSON(data, fname, title) {
-  const file = new File([JSON.stringify(data, null, 2)], fname, { type: 'application/json' });
-  if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title }); return; } catch (e) { if (e.name === 'AbortError') return; }
-  }
-  const url = URL.createObjectURL(file), a = document.createElement('a');
-  a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-  toast(`Saved “${fname}”`);
-}
 function exportDiet() {
   const D = dietModel(), P = DPT.draft ? DPT.draft.plan : D.plan;
   const used = new Set();
   P.meals.forEach(m => { m.planned.forEach(it => used.add(norm(it.food))); m.allowed.forEach(a => { const g = a.match(/^group:\s*(.+)$/i); if (g) D.foods.list.filter(f => f.group === norm(g[1])).forEach(f => used.add(norm(f.name))); else used.add(norm(a)); }); });
   const foods = D.foods.list.filter(f => used.has(norm(f.name))).map(({ row, ...f }) => f);
   const plan = clone2(P); delete plan.start;
-  const slug = (P.name || 'diet').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/gi, '-').replace(/^-+|-+$/g, '') || 'diet';
-  shareJSON({ app: 'workout-log', kind: 'diet', version: 1, exportedAt: new Date().toISOString(), name: P.name, plan, foods }, `${slug}.diet-plan.json`, P.name);
+  shareJSON({ app: 'workout-log', kind: 'diet', version: 1, exportedAt: new Date().toISOString(), name: P.name, plan, foods }, `${fileSlug(P.name, 'diet')}.diet-plan.json`, P.name);
 }
 /* --------------------------- food files --------------------------- */
 const cleanFood = f => ({ name: str(f.name), group: str(f.group).toLowerCase(), kcal: +f.kcal || 0, p: +f.p || 0, c: +f.c || 0, f: +f.f || 0, unit: str(f.unit), gpu: +f.gpu || 0 });
 const sameFood = (a, b) => ['group', 'kcal', 'p', 'c', 'f', 'unit', 'gpu'].every(k => String(a[k] ?? '') === String(b[k] ?? '') || (k !== 'group' && k !== 'unit' && Number(a[k] || 0) === Number(b[k] || 0)));
 function exportFoods() {
   const foods = dietModel().foods.list.map(({ row, ...f }) => f);
-  const slug = (state.sheet?.name || 'foods').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/gi, '-').replace(/^-+|-+$/g, '') || 'sheet';
-  shareJSON({ app: 'workout-log', kind: 'foods', version: 1, exportedAt: new Date().toISOString(), foods }, `foods-${slug}.json`, 'Foods');
+  shareJSON({ app: 'workout-log', kind: 'foods', version: 1, exportedAt: new Date().toISOString(), foods }, `foods-${fileSlug(state.sheet?.name, 'sheet')}.json`, 'Foods');
 }
 async function readJSONFile(file, kinds) {
   try { const d = JSON.parse(await file.text()); if (d.app === 'workout-log' && kinds.includes(d.kind) && Array.isArray(d.foods)) return d; } catch {}

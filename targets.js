@@ -225,7 +225,7 @@ document.addEventListener('click', async ev => {
     }
     case 'tg-save':
       closeModal();
-      if (!DEMO && !tokenValid()) { try { await requestToken(); } catch (err) { toast(err.message, 4000); break; } }
+      try { await ensureToken(); } catch (err) { toast(err.message, 4000); break; }
       saveTargets(); break;
   }
 });

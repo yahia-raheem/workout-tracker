@@ -251,7 +251,6 @@ async function writeLog(match, newRows) {
   for (const [rn, v] of writes) { while (grid.length < rn) grid.push([]); grid[rn - 1] = v; }
   DT.grid = grid; DT.L = parseLog(grid);
 }
-async function ensureToken() { if (!DEMO && !tokenValid()) await requestToken(); }
 function mealRows(ds, meal, status, items, notes) {
   const D = dietModel(), plan = D.plan.name, at = stampNow();
   const base = (food = '', amount = '', unit = '', n = null, note = '') =>

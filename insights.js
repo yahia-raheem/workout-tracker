@@ -574,7 +574,7 @@ document.addEventListener('click', ev => {
   const t = ev.target.closest('[data-act^="ins-"]'); if (!t) return;
   switch (t.dataset.act) {
     case 'ins-range': INS.range = t.dataset.range; store.set('wl:insRange', INS.range); drawInsights(); break;
-    case 'ins-refresh': INS.data = null; renderInsights(); break;
+    case 'ins-refresh': INS.data = null; state.model.rawData = null; renderInsights(); break;
     case 'ins-scope': INS.exScope = t.dataset.scope; drawInsights(); break;
   }
 });

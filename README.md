@@ -78,7 +78,7 @@ The app can be installed with its own icon. It then opens full screen, and on iP
 - **Android (Chrome)**: tap **Install** on the banner, or ☰ → **Install as an app**.
 - **iPhone / iPad**: tap **Install** for the steps: Share → **Add to Home Screen** → Add.
 - Installed apps keep their own storage, so the first time you open the icon you sign in with Google again (and re-enter the PT password if you use PT mode).
-- `sw.js` (the background helper) does not cache anything, so updates to the site show up immediately.
+- `sw.js` keeps a copy of the app's own files (never Google's, never sheet data), so the app opens fast and even offline after one visit. The page is always fetched fresh when online, and scripts are loaded as `file.js?v=<version>`, so updates still show up on the next open.
 
 ## Plan files (PT mode)
 
@@ -194,3 +194,12 @@ Three new tabs in the sheet, created by the app the first time they're needed:
 - **Rest**: values up to 5 are shown as minutes, larger values as seconds (your Plan currently mixes `1` and `90`).
 - Ad-hoc exercises are saved under the selected day like planned ones. Nothing in the row marks them as extra.
 - Your existing formulas (Prev Session Data, Calc_Muscle_Max, dashboards) keep working, because the rows match what the old save script wrote.
+
+## Development
+
+- **Demo mode:** `?demo` (trainee), `?demo&pt` (PT), `?demo&nodiet` (no diet plan). The demo data lives in `demo.js`, which only loads in demo mode.
+- **Before every push:**
+  1. `python3 tools/stamp.py`: writes the scripts' version (a hash of their contents) into `index.html`. Without it, phones keep using the cached scripts.
+  2. `python3 tests/run.py`: runs every journey (logging, saving and sign-in errors, rest timer, Other/cardio, PT unlock, Insights, plan editor and files, PT targets, diet tracker and planner, foods files, offline) in a phone-sized browser. Needs `pip install playwright && playwright install chromium`. It also fails if step 1 was forgotten.
+- Historical Data and Body Data are read once when a sheet opens (unformatted values); the logging screen, hints and Insights share that copy until something is saved.
+

@@ -197,17 +197,7 @@ function planToFile() {
 }
 async function exportPlan() {
   const data = planToFile();
-  const slug = (data.name || 'plan').toLowerCase().replace(/[^a-z0-9؀-ۿ]+/gi, '-').replace(/^-+|-+$/g, '') || 'plan';
-  const fname = `${slug}.workout-plan.json`;
-  const file = new File([JSON.stringify(data, null, 2)], fname, { type: 'application/json' });
-  if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {     // phone: share sheet (WhatsApp, Files…)
-    try { await navigator.share({ files: [file], title: data.name }); return; }
-    catch (e) { if (e.name === 'AbortError') return; }
-  }
-  const url = URL.createObjectURL(file);
-  const a = document.createElement('a'); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-  toast(`Saved “${fname}”`);
+  await shareJSON(data, `${fileSlug(data.name, 'plan')}.workout-plan.json`, data.name);
 }
 async function readPlanFile(f) {
   const msg = $('#plFileMsg'); PL.fileData = null;
@@ -573,7 +563,7 @@ document.addEventListener('click', async ev => {
     }
     case 'pl-review': showPlanReview(); break;
     case 'pl-save':
-      if (!DEMO && !tokenValid()) { try { await requestToken(); } catch (err) { toast(err.message, 4000); break; } }
+      try { await ensureToken(); } catch (err) { toast(err.message, 4000); break; }
       savePlan(); break;
   }
 });

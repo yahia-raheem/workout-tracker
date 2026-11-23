@@ -39,6 +39,8 @@ const e1rm = (w, r) => (w > 0 && r > 0) ? w * (1 + Math.min(r, 30) / 30) : NaN; 
 /* ----------------------------- data ----------------------------- */
 async function loadInsightsData(force = false) {
   if (INS.data && !force) return INS.data;
+  const pre = state.model.rawData;                  // read when the sheet was opened
+  if (pre && !force) { INS.data = buildInsights(pre.hist, pre.body); return INS.data; }
   const id = state.sheet.id, H = state.model.history;
   const meta = await state.ds.meta(id);
   const bodyTab = meta.sheets.find(s => norm(s.title) === 'body data');
